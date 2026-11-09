@@ -810,6 +810,7 @@ def summarize(s):
     """Reduce a snapshot to the numbers the report compares."""
     days = s["window"]["days"]
     out = {"label": s["label"], "window": s["window"], "capturedAt": s["capturedAt"], "network": s["network"]["name"],
+           "networkId": s["network"]["id"], "org": s["org"]["name"],
            "notes": s.get("notes", []), "aps": s["aps"], "rfProfiles": s.get("rfProfiles"), "autoRf": s.get("autoRf"),
            "neighbors": s.get("neighbors"), "apiCalls": s.get("apiCalls"), "apiErrors": len(s.get("apiErrors", [])),
            "ssids": s.get("ssids", [])}

@@ -423,6 +423,9 @@ function review(id,C){
   return R[id];
 }
 let openTile=null, showG=false;
+const isCross=(C,P)=>!!P&&(P.networkId&&C.networkId?P.networkId!==C.networkId:P.network!==C.network);
+const baseName=(C,P)=>isCross(C,P)?P.network:'Baseline';
+const curName=(C,P)=>isCross(C,P)?C.network:'This snapshot';
 /* Compact list for large sites: status chips with counts, search, fixed-height scroll. Filters in place so scroll and focus stay put. */
 function miniTable(o){
   let q='all',txt='';
@@ -459,7 +462,8 @@ function calloutRF(C,P){
   lines.push(`${C.aps.length} APs run ${cnt('2.4')} radio${cnt('2.4')===1?'':'s'} on 2.4 GHz, ${cnt('5')} on 5 GHz and ${cnt('6')} on 6 GHz.`);
   if(cnt('2.4')===1){const r=radios.find(r=>r.band==='2.4');lines.push(`Only ${r.ap} serves 2.4 GHz, so every 2.4 GHz-only device in the building shares that one radio.`)}
   const ar=C.autoRf;if(ar&&ar.ai&&ar.ai.enabled)lines.push('AI-RRM is on, so Meraki can change channels and power by itself. Comparing snapshots shows whether it did.');
-  if(P){const ch=rfChanges(C,P);lines.push(ch.length?`${ch.length} radio setting${ch.length>1?'s':''} changed since the baseline (highlighted).`:'No radio settings changed since the baseline.')}
+  if(P&&isCross(C,P)){const pr=P.aps.flatMap(a=>a.radios),pc=b=>pr.filter(r=>r.band===b).length;lines.push(`${P.network} has ${P.aps.length} APs with ${pc('2.4')} radio${pc('2.4')===1?'':'s'} on 2.4 GHz, ${pc('5')} on 5 GHz and ${pc('6')} on 6 GHz. Different networks aren\u2019t compared AP by AP.`)}
+  else if(P){const ch=rfChanges(C,P);lines.push(ch.length?`${ch.length} radio setting${ch.length>1?'s':''} changed since the baseline (highlighted).`:'No radio settings changed since the baseline.')}
   return lines;
 }
 function rfChanges(C,P){const out=[];for(const a of C.aps){const b=P.aps.find(x=>x.serial===a.serial);if(!b)continue;a.radios.forEach((r,i)=>{const o=b.radios[i]||{};if(r.band!==o.band||r.channel!==o.channel||r.width!==o.width||r.power!==o.power)out.push(a.serial+'|'+i)})}return out}
@@ -468,7 +472,7 @@ function calloutBand(C,P){
   const u6=get(C,['utilByBand','6','busiestP95']);if(u6!=null&&u6<20&&(s['6']||0)<30)lines.push('6 GHz has plenty of spare capacity. How many clients use it is mostly limited by how many devices support Wi-Fi 6E or 7.');
   const loss=['2.4','5','6'].map(b=>[b,get(C,['packetLoss',b,'upPct'])]).filter(x=>x[1]!=null).sort((a,b)=>b[1]-a[1])[0];
   if(loss&&loss[1]>=1)lines.push(`Upstream loss is highest on ${band(loss[0])} (${nf(loss[1],1)}%).`);
-  if(P){const d=(s['5']||0)+(s['6']||0)-((P.bandShare['5']||0)+(P.bandShare['6']||0));if(Math.abs(d)>=2)lines.push(`The share on 5 and 6 GHz ${d>0?'rose':'fell'} by ${nf(Math.abs(d),0)} points since the baseline.`)}
+  if(P){const d=(s['5']||0)+(s['6']||0)-((P.bandShare['5']||0)+(P.bandShare['6']||0));if(Math.abs(d)>=2)lines.push(isCross(C,P)?`The share on 5 and 6 GHz is ${nf(Math.abs(d),0)} points ${d>0?'higher':'lower'} than on ${P.network}.`:`The share on 5 and 6 GHz ${d>0?'rose':'fell'} by ${nf(Math.abs(d),0)} points since the baseline.`)}
   return lines;
 }
 function calloutRadio(C,P){
@@ -594,9 +598,9 @@ function drillDef(id,S){
 }
 function drillPanel(C,P,m){
   const d=drillDef(m.id,C);if(!d)return null;
-  const pd=P?drillDef(m.id,P):null,pIndex=pd?Object.fromEntries(pd.rows.map(r=>[r[d.key],r])):null;
+  const pd=P&&!(isCross(C,P)&&d.key!=='band')?drillDef(m.id,P):null,pIndex=pd?Object.fromEntries(pd.rows.map(r=>[r[d.key],r])):null;
   const cols=d.cols.slice();
-  if(pIndex){const pc=cols.find(c=>c.k===d.pk);if(pc)cols.push({k:'__base',l:'Baseline '+pc.l.toLowerCase(),num:1,f:pc.f,get:r=>{const o=pIndex[r[d.key]];return o?(pc.get?pc.get(o):o[pc.k]):null}})}
+  if(pIndex){const pc=cols.find(c=>c.k===d.pk);if(pc)cols.push({k:'__base',l:(isCross(C,P)?P.network+' ':'Baseline ')+pc.l.toLowerCase(),num:1,f:pc.f,get:r=>{const o=pIndex[r[d.key]];return o?(pc.get?pc.get(o):o[pc.k]):null}})}
   const val=(c,r)=>c.get?c.get(r):r[c.k];
   const body=el('tbody');
   const count=el('span',{class:'muted small'});
@@ -648,7 +652,7 @@ document.body.append(fileInput);
 /* When opened through the local app, offer the other saved snapshots of this network. */
 let SAVED=[];
 if(location.protocol.startsWith('http')){fetch('/local/snapshots').then(r=>r.ok?r.json():null).then(j=>{if(!j)return;
-  const net=SNAPS[cur].summary.network;SAVED=(j.snapshots||[]).filter(x=>x.network===net);render()}).catch(()=>{})}
+  SAVED=j.snapshots||[];render()}).catch(()=>{})}
 async function loadSaved(file){
   try{const r=await fetch('/snapshots/'+encodeURIComponent(file));if(!r.ok)throw new Error('Could not open '+file);
     const i=addSnapshot(await r.json(),file);if(i===cur)return render();
@@ -689,9 +693,16 @@ function render(){
 
   /* controls */
   const selCur=el('select',{id:'sel-cur','aria-label':'Snapshot to show',onchange:e=>{cur=+e.target.value;if(base===cur)base=null;render()}},SNAPS.map((s,i)=>el('option',{value:i,selected:i===cur?'':null},label(s))));
+  const net0=C.network,optFor=(s,i)=>el('option',{value:i,selected:i===base?'':null},s.summary.network===net0?label(s):`${s.summary.network} · ${label(s)}`);
+  const loaded=SNAPS.map((s,i)=>[s,i]).filter(([,i])=>i!==cur);
+  const savedOpts=SAVED.filter(f=>!SNAPS.some(s=>s.summary.capturedAt===f.capturedAt&&s.summary.network===f.network));
+  const sameL=loaded.filter(([s])=>s.summary.network===net0),otherL=loaded.filter(([s])=>s.summary.network!==net0);
+  const sameS=savedOpts.filter(f=>f.network===net0),otherS=savedOpts.filter(f=>f.network!==net0);
+  const sOpt=f=>el('option',{value:'f:'+f.file},`${f.network===net0?'':f.network+' · '}${f.label} · ${fds(f.t0)} – ${fd(f.t1)}`);
   const selBase=el('select',{id:'sel-base','aria-label':'Snapshot to compare with',onchange:e=>{const v=e.target.value;if(v.startsWith('f:'))return loadSaved(v.slice(2));base=v===''?null:+v;render()}},
-    el('option',{value:'',selected:base==null?'':null},'Nothing (single snapshot)'),SNAPS.map((s,i)=>i===cur?null:el('option',{value:i,selected:i===base?'':null},label(s))),
-    SAVED.filter(f=>!SNAPS.some(s=>s.summary.capturedAt===f.capturedAt)).map(f=>el('option',{value:'f:'+f.file},`${f.label} · ${fds(f.t0)} – ${fd(f.t1)} (saved)`)));
+    el('option',{value:'',selected:base==null?'':null},'Nothing (single snapshot)'),
+    sameL.length||sameS.length?el('optgroup',{label:`${net0}: earlier or later`},sameL.map(([s,i])=>optFor(s,i)),sameS.map(sOpt)):null,
+    otherL.length||otherS.length?el('optgroup',{label:'Other networks'},otherL.map(([s,i])=>optFor(s,i)),otherS.map(sOpt)):null);
   const isDark=effectiveTheme()==='dark';
   const seg=el('button',{type:'button',class:'modebtn',onclick:()=>{theme=isDark?'light':'dark';setTheme(theme)},title:isDark?'Switch to the light theme':'Switch to the dark theme'},el('span',{'aria-hidden':'true'},isDark?'☀':'☾'),isDark?'Light mode':'Dark mode');
   app.append(el('div',{class:'bar-top'},
@@ -710,10 +721,11 @@ function render(){
     el('h1',{},C.network+' wireless health'),
     el('div',{class:'meta'},
       el('span',{},'Snapshot: ',el('b',{},win(C)),` (${C.label}, ${C.window.days} days)`,info([],el('span',{},el('b',{},'Period: '),`every number summarises these ${C.window.days} days, ending when the snapshot was taken on ${fd(C.capturedAt)}. AP status and radio settings are as of that moment. Meraki keeps per-radio detail for only 14 days, so a snapshot can only cover the recent past; saved snapshots can be compared however far apart they are.`))),
-      P?el('span',{},'Compared with: ',el('b',{},win(P)),` (${P.label})`):null,
+      P?el('span',{},'Compared with: ',el('b',{},isCross(C,P)?`${P.network}, ${win(P)}`:win(P)),` (${P.label})`):null,
       el('span',{},'APs: ',el('b',{},String(C.aps.length))),
       el('span',{},'Average clients a day: ',el('b',{},nf(get(C,'clients.all'),0)))),
-    P&&(P.window.t1>C.window.t0&&C.window.t1>P.window.t0)?el('p',{class:'warnline'},'These two periods overlap, so some days are counted in both and real changes look smaller than they are. For a fair comparison, take snapshots that don’t overlap.'):null,
+    P&&isCross(C,P)?el('p',{class:'warnline'},`Comparing two different networks. Green means ${C.network} does better than ${P.network}, red means it does worse. Sizes, layouts and uses differ, so treat differences as prompts to look, not verdicts. AP-by-AP sections show ${C.network} only.`):null,
+    P&&!isCross(C,P)&&(P.window.t1>C.window.t0&&C.window.t1>P.window.t0)?el('p',{class:'warnline'},'These two periods overlap, so some days are counted in both and real changes look smaller than they are. For a fair comparison, take snapshots that don’t overlap.'):null,
     P&&P.window.days!==C.window.days?el('p',{class:'warnline'},`The periods are different lengths (${P.window.days} and ${C.window.days} days). Rates and daily averages still compare; peaks and totals may not.`):null));
 
   /* overview: infrastructure tiles first, then the key metrics */
@@ -730,7 +742,7 @@ function render(){
    const down=C.aps.filter(x=>x.status&&x.status!=='online');
    tiles.append(mkTile('aps','Access points',a.known?`${a.on}/${a.n} online`:`${a.n} APs`,
      el('div',{class:'s'},!down.length?`${nf(a.now,0)} clients connected now`:down.length<=2?down.map(x=>`${x.name}: ${x.status}`).join(' · '):[['offline','offline'],['alerting','alerting'],['dormant','dormant']].map(([k,l])=>{const c=down.filter(x=>x.status===k).length;return c?`${c} ${l}`:''}).filter(Boolean).join(' · ')+' · click for the list'),
-     pa&&pa.known?el('div',{class:'tchg'},el('span',{class:'chip '+(a.on===pa.on?'same':a.on>pa.on?'good':'bad')},a.on===pa.on?'No change':(a.on>pa.on?'+':'−')+Math.abs(a.on-pa.on)+' online'),el('span',{class:'muted small'},` vs ${pa.on}/${pa.n}`)):null,
+     pa&&pa.known&&!isCross(C,P)?el('div',{class:'tchg'},el('span',{class:'chip '+(a.on===pa.on?'same':a.on>pa.on?'good':'bad')},a.on===pa.on?'No change':(a.on>pa.on?'+':'−')+Math.abs(a.on-pa.on)+' online'),el('span',{class:'muted small'},` vs ${pa.on}/${pa.n}`)):null,
      down.length?' alertt':''))}
   {const r=radStat(C);
    const many=C.aps.length>3;
@@ -780,7 +792,7 @@ function render(){
       el('ol',{},r.steps.filter(Boolean).map(x=>el('li',{},x))),
       guideActions(t,m,C))}
   app.append(el('section',{id:'overview'},el('div',{class:'sec-head'},el('h2',{},'Overview'),
-      el('p',{class:'muted small'},P?'Each tile shows this snapshot and its change from the baseline. Green improved, red got worse, grey no change. Click a tile for details and what to review.':'The key numbers for this snapshot. Click a tile for details and what to review.')),
+      el('p',{class:'muted small'},P?(isCross(C,P)?`Each tile shows ${C.network} against ${P.network}. Green better, red worse, grey about the same. Click a tile for details and what to review.`:'Each tile shows this snapshot and its change from the baseline. Green improved, red got worse, grey no change. Click a tile for details and what to review.'):'The key numbers for this snapshot. Click a tile for details and what to review.')),
     tiles,guide));
 
   /* scorecard */
@@ -804,10 +816,10 @@ function render(){
         el('td',{},sp),gcell));
     }
   }
-  const head=(P?['Metric','Baseline','This snapshot','Change','Daily trend']:['Metric','Value','Daily trend']).concat(showG?['Guideline']:[]);
+  const head=(P?['Metric',baseName(C,P),curName(C,P),isCross(C,P)?'Difference':'Change','Daily trend']:['Metric','Value','Daily trend']).concat(showG?['Guideline']:[]);
   const gBtn=el('button',{type:'button','aria-pressed':String(showG),onclick:()=>{showG=!showG;render()}},showG?'Hide guidelines':'Show guidelines');
   app.append(el('section',{id:'scorecard'},el('div',{class:'sec-head'},el('div',{class:'sec-row'},el('h2',{},'Scorecard'),gBtn),
-      el('p',{class:'muted small'},(P?'Green got better, red got worse, grey stayed within normal day-to-day variation. The trend line shows the baseline (grey) then this snapshot.':'The measured values for this snapshot, with their daily trend. Take another snapshot later and compare to see what improved or got worse.')+' Click any row to see the clients, radios or networks behind it.')),
+      el('p',{class:'muted small'},(P?(isCross(C,P)?`Green: ${C.network} does better than ${P.network}. Red: worse. Grey: about the same. The trend line shows ${P.network} (grey) then ${C.network}.`:'Green got better, red got worse, grey stayed within normal day-to-day variation. The trend line shows the baseline (grey) then this snapshot.'):'The measured values for this snapshot, with their daily trend. Take another snapshot later and compare to see what improved or got worse.')+' Click any row to see the clients, radios or networks behind it.')),
     showG?el('div',{class:'callout gcall'},el('b',{},'About the guidelines'),el('p',{style:'margin-top:4px'},'Guidelines are general rules of thumb for enterprise Wi-Fi, not Meraki thresholds and not pass/fail tests. A value outside a guideline is a prompt to look, not proof of a fault: a few devices, IoT-heavy sites or busy neighbours can push a healthy network outside them. Hover the (i) beside each guideline for its basis and when it can mislead. Comparisons never use guidelines; they only show change.')):null,
     el('div',{class:'sc-wrap'+(drill?' open':''),style:drill&&panelW?'--pw:'+panelW+'px':null},
       el('div',{class:'card'},el('div',{class:'tbl-wrap'},el('table',{},el('thead',{},el('tr',{},head.map((h,i)=>el('th',{class:(P?[1,2,3]:[1]).includes(i)?'num':null},h)))),tb))),
@@ -815,25 +827,25 @@ function render(){
       drill?drillPanel(C,P,byId[drill]):null)));
 
   /* RF configuration */
-  const chg=P?new Set(rfChanges(C,P)):new Set();
+  const chg=P&&!isCross(C,P)?new Set(rfChanges(C,P)):new Set();
   const rtb=el('tbody');
   for(const a of C.aps){const pa=P?P.aps.find(x=>x.serial===a.serial):null;
     a.radios.forEach((r,i)=>{const o=pa?pa.radios[i]:null,f=x=>x?`ch ${x.channel} · ${x.width||'—'} · ${x.power||'—'}`:'—';
       rtb.append(el('tr',{class:chg.has(a.serial+'|'+i)?'chg-row':null},
         el('td',{},i===0?el('div',{},el('b',{},a.name),el('div',{class:'muted small'},a.model+' · '+(a.firmware||''))):null),
-        el('td',{},band(r.band)),P?el('td',{class:'muted'},f(o)):null,el('td',{},f(r)),el('td',{class:'muted small'},(r.ssids||[]).join(', ')||'—')))})}
+        el('td',{},band(r.band)),P&&!isCross(C,P)?el('td',{class:'muted'},f(o)):null,el('td',{},f(r)),el('td',{class:'muted small'},(r.ssids||[]).join(', ')||'—')))})}
   const prof=S=>{const p=(S.rfProfiles||[])[0];if(!p)return'—';const fl=Object.entries(p.flexRadios||{}).filter(([m])=>S.aps.some(a=>a.model===m)).map(([m,b])=>m+' → '+b.join('/')).join(', ');
     return `Band steering ${p.bandSteering?'on':'off'} · min bitrate 2.4/5/6 GHz: ${[p['2.4'],p['5'],p['6']].map(z=>z&&z.minBitrate||'—').join(' / ')} Mbps`+(fl?` · flex radios ${fl}`:'')};
   const rrm=S=>{const r=S.autoRf;if(!r)return'—';return `AI-RRM ${r.ai&&r.ai.enabled?'on':'off'} · FRA ${r.fra&&r.fra.enabled?'on':'off'} · minimise changes in busy hours ${r.busyHour&&r.busyHour.minimizeChanges&&r.busyHour.minimizeChanges.enabled?'on':'off'}`};
   const nb=S=>S.neighbors?`${nf(S.neighbors.bssids,0)} heard, ${nf(S.neighbors.strongBssids,0)} strong (25 dB or more)`:'—';
   const ctb=el('tbody',{},[['RF profile',prof,'rfProfiles'],['AutoRF',rrm,'rrm'],['Neighbouring networks',nb,'airMarshal']].map(([n,f,src])=>
-    el('tr',{class:P&&src!=='airMarshal'&&f(P)!==f(C)?'chg-row':null},el('td',{},el('span',{class:'mname'},n,info(src))),P?el('td',{class:'muted'},f(P)):null,el('td',{},f(C)))));
+    el('tr',{class:P&&!isCross(C,P)&&src!=='airMarshal'&&f(P)!==f(C)?'chg-row':null},el('td',{},el('span',{class:'mname'},n,info(src))),P?el('td',{class:'muted'},f(P)):null,el('td',{},f(C)))));
   app.append(el('section',{},el('div',{class:'sec-head'},el('h2',{},'RF configuration'),el('p',{class:'muted small'},'Channel, width and power of every radio, read when the snapshot was taken.')),
     callout(calloutRF(C,P)),
     el('div',{class:'card'},el('h3',{},'Radios',info(['status','radioSettings'],'Radio order (wifi0, 1, 2) follows the order Meraki lists each radio’s BSSIDs.')),
-      el('div',{class:'tbl-wrap',style:'margin-top:8px'},el('table',{},el('thead',{},el('tr',{},el('th',{},'AP'),el('th',{},'Band'),P?el('th',{},'Baseline'):null,el('th',{},P?'This snapshot':'Setting'),el('th',{},'SSIDs broadcast'))),rtb))),
+      el('div',{class:'tbl-wrap',style:'margin-top:8px'},el('table',{},el('thead',{},el('tr',{},el('th',{},'AP'),el('th',{},'Band'),P&&!isCross(C,P)?el('th',{},'Baseline'):null,el('th',{},P&&!isCross(C,P)?'This snapshot':'Setting'),el('th',{},'SSIDs broadcast'))),rtb))),
     el('div',{class:'card'},el('h3',{},'Network settings'),
-      el('div',{class:'tbl-wrap',style:'margin-top:8px'},el('table',{},el('thead',{},el('tr',{},el('th',{},'Setting'),P?el('th',{},'Baseline'):null,el('th',{},P?'This snapshot':'Value'))),ctb)))));
+      el('div',{class:'tbl-wrap',style:'margin-top:8px'},el('table',{},el('thead',{},el('tr',{},el('th',{},'Setting'),P?el('th',{},baseName(C,P)):null,el('th',{},P?curName(C,P):'Value'))),ctb)))));
 
   /* by band */
   const BR=[
@@ -853,7 +865,7 @@ function render(){
       const dd=a-x,t=tol==null?Math.abs(x)*.05:tol,cls=Math.abs(dd)<=t||hi==null?'same':(hi?dd>0:dd<0)?'good':'bad';
       tr.append(el('td',{class:'num'},el('span',{class:'muted'},nf(x,d)),' → ',el('span',{class:'delta '+cls},nf(a,d)+u)))}
     btb.append(tr)}
-  app.append(el('section',{id:'band'},el('div',{class:'sec-head'},el('h2',{},'By band'),el('p',{class:'muted small'},P?'Baseline → this snapshot. Green better, red worse, grey within normal variation.':'How each band is doing.')),
+  app.append(el('section',{id:'band'},el('div',{class:'sec-head'},el('h2',{},'By band'),el('p',{class:'muted small'},P?`${baseName(C,P)} → ${isCross(C,P)?C.network:'this snapshot'}. Green better, red worse, grey within normal variation.`:'How each band is doing.')),
     callout(calloutBand(C,P)),
     el('div',{class:'card'},el('div',{class:'tbl-wrap'},el('table',{},el('thead',{},el('tr',{},el('th',{},'Metric'),el('th',{class:'num'},'2.4 GHz'),el('th',{class:'num'},'5 GHz'),el('th',{class:'num'},'6 GHz'))),btb)))));
 
@@ -869,7 +881,7 @@ function render(){
   app.append(el('section',{id:'radios'},el('div',{class:'sec-head'},el('h2',{},'Radio utilization'),el('p',{class:'muted small'},'How busy each radio is, from 10-minute samples. Each 5 GHz radio is shown separately. “Peak” is the 95th percentile: the radio is below it 95% of the time.')),
     callout(calloutRadio(C,P)),
     el('div',{class:'card'},el('h3',{},'Per radio',info('radioUtil','Meraki keeps this 10-minute data for 14 days, so each snapshot covers at most the last 14 days.')),
-      el('div',{class:'legend',style:'margin:8px 0'},P?el('span',{style:'--c:var(--base)'},`Baseline (${win(P)})`):null,el('span',{style:'--c:var(--accent)'},P?`This snapshot (${win(C)})`:`${win(C)}`),el('span',{class:'nolegend'},`Trend lines cover the whole ${C.window.days}-day period, one point per hour (busy hours show as spikes).`)),
+      el('div',{class:'legend',style:'margin:8px 0'},P&&!isCross(C,P)?el('span',{style:'--c:var(--base)'},`Baseline (${win(P)})`):null,el('span',{style:'--c:var(--accent)'},P&&!isCross(C,P)?`This snapshot (${win(C)})`:`${win(C)}`),el('span',{class:'nolegend'},`Trend lines cover the whole ${C.window.days}-day period, one point per hour (busy hours show as spikes).`)),
       el('div',{class:'tbl-wrap'},el('table',{},el('thead',{},el('tr',{},el('th',{},'Radio'),el('th',{class:'num'},'Average'),el('th',{class:'num'},'Peak (p95)'),el('th',{class:'num'},'Max'),el('th',{class:'num'},'Non-Wi-Fi at peak'),el('th',{},`Trend over ${C.window.days} days`))),utb)))));
 
   /* roaming */
@@ -886,7 +898,7 @@ function render(){
     if(top.length)lines.push(`Struggling most: ${top.map(c=>c.name).join(', ')}.`);
     if(T.pingPongClients)lines.push(`${T.pingPongClients} client${T.pingPongClients>1?'s':''} ping-pong between APs.`);
     if(T.stickyClients)lines.push(`${T.stickyClients} client${T.stickyClients>1?'s were':' was'} flagged as sticky.`);
-    if(PR&&PR.totals.roams){const g=T.roams?100*T.good/T.roams:0,pg=100*PR.totals.good/PR.totals.roams;if(Math.abs(g-pg)>=2)lines.push(`Good roams ${g>pg?'rose':'fell'} from ${nf(pg,0)}% to ${nf(g,0)}% since the baseline.`)}
+    if(PR&&PR.totals.roams){const g=T.roams?100*T.good/T.roams:0,pg=100*PR.totals.good/PR.totals.roams;if(Math.abs(g-pg)>=2)lines.push(isCross(C,P)?`Good roams: ${nf(g,0)}% here against ${nf(pg,0)}% on ${P.network}.`:`Good roams ${g>pg?'rose':'fell'} from ${nf(pg,0)}% to ${nf(g,0)}% since the baseline.`)}
     if(T.clientsSkipped)lines.push(`Checked the ${T.clientsChecked} busiest clients; ${T.clientsSkipped} others were not checked.`);
     sec.append(callout(lines));
 
@@ -976,7 +988,7 @@ function render(){
   /* client issues */
   const perDay=(S,v)=>v==null?null:v/days(S);
   const bars=(title,src,rowsB,fmt,why)=>{const mx=Math.max(1,...rowsB.flatMap(r=>[r[1]||0,r[2]||0]));
-    const card=el('div',{class:'card'},el('h3',{},title,info(src,why)),el('div',{class:'legend',style:'margin:6px 0 8px'},P?el('span',{style:'--c:var(--base)'},'Baseline'):null,el('span',{style:'--c:var(--accent)'},P?'This snapshot':'Per day')));
+    const card=el('div',{class:'card'},el('h3',{},title,info(src,why)),el('div',{class:'legend',style:'margin:6px 0 8px'},P?el('span',{style:'--c:var(--base)'},baseName(C,P)):null,el('span',{style:'--c:var(--accent)'},P?curName(C,P):'Per day')));
     for(const[l,b,a]of rowsB)card.append(el('div',{class:'hbar'},el('span',{class:'lab',title:l},l),
       el('span',{class:'track'},P?el('span',{class:'b',style:`width:${100*(b||0)/mx}%;background:var(--base)`}):null,el('span',{class:'b',style:`width:${100*(a||0)/mx}%;background:var(--accent)`})),
       el('span',{class:'v'},P?fmt(b)+' → '+fmt(a):fmt(a))));return card};

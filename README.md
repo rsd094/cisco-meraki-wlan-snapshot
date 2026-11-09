@@ -51,6 +51,8 @@ Each snapshot saves two files in the `snapshots` folder:
 
 **Comparing:** open a report through the app and pick another snapshot of the same network under **Compare with**, or use **Load snapshot file…** to pick a `.json` from anywhere. A single snapshot shows values with no judgement; a comparison colours each change **green** (better), **red** (worse) or **grey** (no change beyond normal day-to-day variation). Snapshots can be any distance apart, today and a year from now. The report warns you if two periods overlap or are different lengths.
 
+**Comparing with another network:** the **Compare with** list also shows snapshots of your other wireless networks, under **Other networks**. The report then puts the two networks side by side: columns are named after each network, green means this network does better and red means it does worse. AP-by-AP sections (radio settings, per-radio utilization) show this network only, because the APs are different. Networks differ in size, layout and use, so treat differences as prompts to look rather than verdicts. Use snapshots of the same period length.
+
 **Exporting:** **Export › HTML** downloads the report as one self-contained file, including any snapshot loaded for comparison. **Export › PDF** opens your browser's print dialog with a print layout; choose **Save as PDF**.
 
 ## Meraki API endpoints used

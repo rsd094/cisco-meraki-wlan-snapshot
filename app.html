@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cisco Meraki WLAN Snapshot</title>
+<style>
+:root{--bg:#f6f7f5;--panel:#fff;--fg:#16201b;--muted:#5b6560;--line:#dde2de;--soft:#eef1ee;--accent:#1f6f8b;--accent-soft:#e2eff4;--bad:#b42318;--good:#17803d;
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;--mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;color-scheme:light}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--bg:#0f1311;--panel:#171c19;--fg:#e5eae6;--muted:#9ba59f;--line:#2a312d;--soft:#1e2420;--accent:#63b6d3;--accent-soft:#16303a;--bad:#f2867b;--good:#5ccb84;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#0f1311;--panel:#171c19;--fg:#e5eae6;--muted:#9ba59f;--line:#2a312d;--soft:#1e2420;--accent:#63b6d3;--accent-soft:#16303a;--bad:#f2867b;--good:#5ccb84;color-scheme:dark}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.5 var(--sans)}
+header{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;padding:14px max(16px,env(safe-area-inset-left,0px)) 14px;background:var(--panel);border-bottom:1px solid var(--line)}
+header h1{font-size:17px;margin:0}
+main{max-width:860px;margin:0 auto;padding-block:24px 60px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:flex;flex-direction:column;gap:16px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:18px 20px;display:flex;flex-direction:column;gap:12px}
+h2{font-size:16px;margin:0;display:flex;align-items:center;gap:8px}
+.step{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;background:var(--accent-soft);color:var(--accent);font-size:12px;font-weight:700}
+p{margin:0}.muted{color:var(--muted)}.small{font-size:13px}
+.row{display:flex;flex-wrap:wrap;gap:10px;align-items:end}
+label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--muted)}
+label.inline{flex-direction:row;align-items:center;gap:6px;font-size:13px}
+input,select,button{font:inherit;font-size:14px;color:var(--fg);background:var(--panel);border:1px solid var(--line);border-radius:7px;padding:7px 10px}
+input[type=password],input[type=text]{min-width:0}
+#key{width:min(420px,100%)}#net{min-width:min(320px,100%);max-width:100%}
+button{cursor:pointer}button.primary{background:var(--accent);border-color:var(--accent);color:var(--panel);font-weight:600}
+button:disabled{opacity:.5;cursor:default}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:7px;overflow:hidden}
+.seg button{border:0;border-radius:0;padding:5px 10px;background:transparent;color:var(--muted);font-size:13px}
+.seg button[aria-pressed="true"]{background:var(--soft);color:var(--fg);font-weight:600}
+.err{color:var(--bad);font-size:13px}
+.modebtn{display:inline-flex;align-items:center;gap:7px;font-weight:600;font-size:13px}.ok{color:var(--good);font-size:13px}
+.log{font-family:var(--mono);font-size:12px;background:var(--soft);border-radius:7px;padding:10px 12px;max-height:220px;overflow:auto;white-space:pre-wrap}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th{text-align:left;font-size:12px;color:var(--muted);font-weight:600;padding:6px 8px;border-bottom:1px solid var(--line)}
+td{padding:8px;border-bottom:1px solid var(--line)}
+tr:last-child td{border-bottom:0}
+a{color:var(--accent)}
+.tbl{overflow-x:auto}
+details summary{cursor:pointer;font-weight:600;font-size:14px}
+.api table{font-size:13px;margin-top:10px}.api td{vertical-align:top}
+.api code{font-family:var(--mono);font-size:12px;white-space:nowrap}
+.api tr.grp td{background:var(--soft);font-weight:650;font-size:12px;color:var(--muted)}
+.i{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:50%;border:1px solid var(--muted);color:var(--muted);font:italic 600 11px/1 Georgia,serif;margin-left:6px;cursor:help;vertical-align:1px}
+.i:hover,.i:focus{color:var(--fg);border-color:var(--fg);outline:none}
+.i .pop{display:none;position:fixed;width:min(440px,calc(100vw - 24px));z-index:30;background:var(--panel);border:1px solid var(--line);border-radius:8px;box-shadow:0 10px 28px rgba(0,0,0,.22);padding:10px 12px;font:400 13px/1.5 var(--sans);color:var(--fg);text-transform:none;letter-spacing:0}
+.i:hover .pop,.i:focus .pop{display:block}
+.i .pop p{margin:0 0 6px}.i .pop ul{margin:0 0 6px;padding-left:18px}.i .pop li{margin:2px 0}
+</style>
+</head>
+<body>
+<header>
+  <h1>Cisco Meraki WLAN Snapshot</h1>
+  <div id="theme"></div>
+</header>
+<main>
+  <p class="muted">Take a health snapshot of a Meraki wireless network. Each snapshot saves a report you can open later and compare with any other snapshot of the same network. Read-only: only GET requests are sent to Meraki.</p>
+
+  <section class="card" aria-labelledby="h-key">
+    <h2 id="h-key"><span class="step">1</span>API key</h2>
+    <div class="row">
+      <label for="key">Meraki Dashboard API key (read-only access is enough)
+        <input id="key" type="password" autocomplete="off" spellcheck="false" placeholder="Paste your API key">
+      </label>
+      <button id="connect" class="primary" type="button">Connect</button>
+    </div>
+    <label class="inline"><input id="remember" type="checkbox"> Remember on this computer</label>
+    <p class="muted small">The key stays in this browser and is sent only to this app on your computer, which passes it to api.meraki.com.</p>
+    <p id="key-msg" role="status"></p>
+  </section>
+
+  <section class="card" aria-labelledby="h-net">
+    <h2 id="h-net"><span class="step">2</span>Network</h2>
+    <div class="row">
+      <label for="net">Wireless network
+        <select id="net" disabled><option>Connect first</option></select>
+      </label>
+      <label for="label">Label (e.g. pre-install)
+        <input id="label" type="text" value="snapshot" maxlength="40">
+      </label>
+      <label for="days"><span>Period<span class="i" tabindex="0" role="button" aria-label="What the period means">i<span class="pop" role="tooltip">
+          <p><b>The period is how much history the snapshot captures</b>, counting back from the moment you click Generate report. Every number in the report summarises those days.</p>
+          <p>14 days is the most because Meraki keeps the 10-minute, per-radio data (each 5 GHz radio, busy-hour peaks, interference) for only 14 days. Other data goes back further:</p>
+          <ul><li>Client counts, signal, traffic: 31 days</li><li>Connection results: about 65 days</li><li>Packet loss: 90 days · Latency: 180 days</li></ul>
+          <p>AP status and radio settings (channel, width, power) are read at the moment of capture, not over the period.</p>
+          <p>A snapshot can't be taken for the past: to have a "before", take it before the change. Saved snapshots can be compared however far apart they are.</p>
+        </span></span></span>
+        <select id="days"><option value="14" selected>Last 14 days</option><option value="7">Last 7 days</option></select>
+      </label>
+    </div>
+    <p class="muted small">14 days is the most Meraki keeps for per-radio detail. Use the same period each time so snapshots compare fairly.</p>
+  </section>
+
+  <section class="card" aria-labelledby="h-gen">
+    <h2 id="h-gen"><span class="step">3</span>Generate report</h2>
+    <div class="row"><button id="go" class="primary" type="button" disabled>Generate report</button><span id="gen-msg" role="status"></span></div>
+    <div id="log" class="log" hidden></div>
+  </section>
+
+  <section class="card" aria-labelledby="h-api">
+    <h2 id="h-api">What this app reads from Meraki</h2>
+    <p class="muted small">Every figure in a report comes from these Meraki Dashboard API calls. All are <b>GET</b> requests: the app only reads, it never changes anything in your Dashboard. A read-only API key is enough.</p>
+    <details id="api-details"><summary>Show all <span id="api-count">—</span> endpoints</summary>
+      <div class="tbl api"><table><thead><tr><th>Endpoint</th><th>What it reads</th><th>Shown in the report</th><th>How far back</th><th>Calls per snapshot</th></tr></thead><tbody id="api-rows"></tbody></table></div>
+      <p class="muted small" style="margin-top:8px">N = access points, B = bands per AP, C = wireless clients, D = days in the period. A 14-day snapshot of a 3-AP network makes about 130 calls; most of a large site's calls go to roaming (one per client, up to 300).</p>
+      <p class="muted small" id="api-events"></p>
+    </details>
+  </section>
+
+  <section class="card" aria-labelledby="h-saved">
+    <h2 id="h-saved">Saved snapshots</h2>
+    <p class="muted small">Open a report, then use “Compare with” at the top of it to compare against another snapshot of the same network.</p>
+    <div class="tbl"><table><thead><tr><th>Network</th><th>Label</th><th>Period</th><th>Taken</th><th></th></tr></thead><tbody id="saved"><tr><td colspan="5" class="muted">None yet.</td></tr></tbody></table></div>
+  </section>
+</main>
+<script>
+(function(){
+const $=id=>document.getElementById(id);
+const store={get(k){try{return localStorage.getItem(k)??sessionStorage.getItem(k)}catch(e){return null}},
+  set(k,v,keep){try{(keep?localStorage:sessionStorage).setItem(k,v);(keep?sessionStorage:localStorage).removeItem(k)}catch(e){}}};
+const fd=s=>new Date(s).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric',timeZone:'UTC'});
+const fds=s=>new Date(s).toLocaleDateString('en-GB',{day:'numeric',month:'short',timeZone:'UTC'});
+
+/* info popups: place below the icon, kept inside the window */
+document.querySelectorAll('.i').forEach(ic=>{const pop=ic.querySelector('.pop');const place=()=>{const r=ic.getBoundingClientRect(),w=Math.min(440,innerWidth-24);
+  pop.style.left=Math.max(12,Math.min(r.left-10,innerWidth-w-12))+'px';pop.style.top=(r.bottom+6)+'px'};
+  ic.addEventListener('mouseenter',place);ic.addEventListener('focus',place)});
+window.addEventListener('scroll',()=>document.activeElement&&document.activeElement.classList.contains('i')&&document.activeElement.blur(),{passive:true});
+
+/* theme */
+let theme=store.get('wlan-snapshot-theme')||'auto';
+const effective=()=>theme==='dark'||theme==='light'?theme:(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');
+function applyTheme(){if(theme==='auto')delete document.documentElement.dataset.theme;else document.documentElement.dataset.theme=theme;
+  const dark=effective()==='dark',b=document.createElement('button');b.type='button';b.className='modebtn';
+  b.title=dark?'Switch to the light theme':'Switch to the dark theme';
+  const ic=document.createElement('span');ic.setAttribute('aria-hidden','true');ic.textContent=dark?'☀':'☾';b.append(ic,dark?'Light mode':'Dark mode');
+  b.onclick=()=>{theme=dark?'light':'dark';try{localStorage.setItem('wlan-snapshot-theme',theme)}catch(e){}applyTheme()};
+  $('theme').replaceChildren(b)}
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change',()=>applyTheme());
+applyTheme();
+
+/* key */
+const k0=store.get('wlan-snapshot-key');if(k0){$('key').value=k0;try{$('remember').checked=!!localStorage.getItem('wlan-snapshot-key')}catch(e){}}
+const key=()=>$('key').value.trim();
+async function api(path,opts={}){const r=await fetch(path,{...opts,headers:{...(opts.headers||{}),'X-Meraki-API-Key':key()}});const j=await r.json().catch(()=>({error:'Unexpected response from the app.'}));if(!r.ok)throw new Error(j.error||('Error '+r.status));return j}
+let NETS=[];
+async function connect(){
+  const msg=$('key-msg');if(!key()){msg.className='err';msg.textContent='Paste an API key first.';return}
+  store.set('wlan-snapshot-key',key(),$('remember').checked);
+  msg.className='muted small';msg.textContent='Listing your organizations and wireless networks…';$('connect').disabled=true;
+  try{const j=await api('/local/networks');
+    const sel=$('net');sel.replaceChildren();NETS=[];
+    for(const o of j.orgs){if(!o.networks.length)continue;const g=document.createElement('optgroup');g.label=o.name;
+      for(const n of o.networks){const op=document.createElement('option');op.value=n.id;op.textContent=n.name;op.dataset.org=o.id;g.append(op);NETS.push(n)}sel.append(g)}
+    const skipped=j.orgs.filter(o=>o.error).map(o=>o.name);
+    if(!NETS.length){sel.append(new Option('No wireless networks found'));sel.disabled=true;$('go').disabled=true}
+    else{sel.disabled=false;$('go').disabled=false;const last=store.get('wlan-snapshot-net');if(last&&NETS.some(n=>n.id===last))sel.value=last}
+    msg.className='ok';msg.textContent=`Connected. ${NETS.length} wireless network${NETS.length===1?'':'s'} found`+(skipped.length?` (no API access to: ${skipped.join(', ')})`:'')+'.';
+  }catch(e){msg.className='err';msg.textContent=e.message}finally{$('connect').disabled=false}
+}
+$('connect').onclick=connect;$('key').addEventListener('keydown',e=>{if(e.key==='Enter')connect()});
+$('net').onchange=()=>store.set('wlan-snapshot-net',$('net').value,true);
+
+/* generate */
+$('go').onclick=async()=>{
+  const sel=$('net'),op=sel.selectedOptions[0];if(!op||!op.dataset.org)return;
+  const msg=$('gen-msg'),log=$('log');$('go').disabled=true;log.hidden=false;log.textContent='Starting…\n';msg.className='muted small';msg.textContent='Taking the snapshot. This takes about a minute.';
+  try{const {job}=await api('/local/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({orgId:op.dataset.org,networkId:sel.value,label:$('label').value,days:$('days').value})});
+    for(;;){await new Promise(r=>setTimeout(r,1200));const j=await api('/local/job/'+job);log.textContent=j.lines.join('\n');log.scrollTop=log.scrollHeight;
+      if(j.status==='done'){msg.className='ok';msg.textContent='Done. Opening the report…';loadSaved();location.href='/snapshots/'+encodeURIComponent(j.report);break}
+      if(j.status==='error'){msg.className='err';msg.textContent=j.error;break}}
+  }catch(e){msg.className='err';msg.textContent=e.message}finally{$('go').disabled=false}
+};
+
+/* saved */
+async function loadSaved(){try{const r=await fetch('/local/snapshots');const j=await r.json();const tb=$('saved');tb.replaceChildren();
+  if(!j.snapshots.length){tb.innerHTML='<tr><td colspan="5" class="muted">None yet.</td></tr>';return}
+  for(const s of j.snapshots){const tr=document.createElement('tr');
+    const cells=[s.network+' · '+s.org,s.label,fds(s.t0)+' – '+fd(s.t1),fd(s.capturedAt)];for(const c of cells){const td=document.createElement('td');td.textContent=c;tr.append(td)}
+    const td=document.createElement('td');if(s.report){const a=document.createElement('a');a.href='/snapshots/'+encodeURIComponent(s.report);a.textContent='Open report';td.append(a)}tr.append(td);tb.append(tr)}
+}catch(e){}}
+loadSaved();
+if(key())connect();
+
+/* endpoint reference */
+fetch('/local/endpoints').then(r=>r.json()).then(j=>{const tb=$('api-rows');let area='';
+  $('api-count').textContent=j.endpoints.length;
+  for(const e of j.endpoints){
+    if(e.area!==area){area=e.area;const g=document.createElement('tr');g.className='grp';const td=document.createElement('td');td.colSpan=5;td.textContent=area;g.append(td);tb.append(g)}
+    const tr=document.createElement('tr');
+    const c=document.createElement('td');const code=document.createElement('code');code.textContent=e.path;c.append(code);tr.append(c);
+    for(const k of ['use','shows','lookback','calls']){const td=document.createElement('td');td.textContent=e[k];tr.append(td)}
+    tb.append(tr)}
+  $('api-events').textContent='Wireless event types read from the event log: '+Object.keys(j.eventTypes).join(', ')+'.';
+}).catch(()=>{});
+})();
+</script>
+</body>
+</html>

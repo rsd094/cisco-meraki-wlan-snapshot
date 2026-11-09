@@ -1,0 +1,12 @@
+.DS_Store
+__pycache__/
+*.pyc
+
+# Snapshots and reports hold customer data (client names, MACs, IPs). Never commit them.
+snapshots/
+*.html
+!app.html
+!report_template.html
+
+# build output: the shareable zip is published as a GitHub release instead
+dist/

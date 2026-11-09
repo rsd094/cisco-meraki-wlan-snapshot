@@ -206,7 +206,8 @@ def main():
         sys.exit("No free port between %d and %d." % (args.port, args.port + 19))
     url = "http://localhost:%d" % srv.server_port
     print("Cisco Meraki WLAN Snapshot running at %s  (Ctrl+C to stop)" % url, flush=True)
-    print("Read-only: only GET requests are sent to the Meraki Dashboard API.", flush=True)
+    print("Read-only: only GET requests are sent to the Meraki Dashboard API. No changes are made to your", flush=True)
+    print("Meraki environment, so a read-only admin API key is all it needs.", flush=True)
     if args.open:
         threading.Timer(0.5, webbrowser.open, [url]).start()
     try:

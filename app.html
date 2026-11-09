@@ -39,6 +39,7 @@ td{padding:8px;border-bottom:1px solid var(--line)}
 tr:last-child td{border-bottom:0}
 a{color:var(--accent)}
 .tbl{overflow-x:auto}
+.disclaimer{border:1px solid var(--good);background:color-mix(in srgb,var(--good) 10%,transparent);border-radius:10px;padding:12px 16px;font-size:14px;line-height:1.5}
 details summary{cursor:pointer;font-weight:600;font-size:14px}
 .api table{font-size:13px;margin-top:10px}.api td{vertical-align:top}
 .api code{font-family:var(--mono);font-size:12px;white-space:nowrap}
@@ -56,7 +57,8 @@ details summary{cursor:pointer;font-weight:600;font-size:14px}
   <div id="theme"></div>
 </header>
 <main>
-  <p class="muted">Take a health snapshot of a Meraki wireless network. Each snapshot saves a report you can open later and compare with any other snapshot of the same network. Read-only: only GET requests are sent to Meraki.</p>
+  <p class="muted">Take a WLAN snapshot of a Meraki wireless network. Each snapshot saves a report you can open later and compare with any other snapshot.</p>
+  <div class="disclaimer" role="note"><b>Read-only. No changes are made to your Meraki environment.</b> This tool only sends <b>GET</b> requests to the Meraki Dashboard API. It never sends POST, PUT, PATCH or DELETE requests, so it can’t change any setting, device or network. A <b>read-only admin API key</b> is all it needs.</div>
 
   <section class="card" aria-labelledby="h-key">
     <h2 id="h-key"><span class="step">1</span>API key</h2>
@@ -101,7 +103,7 @@ details summary{cursor:pointer;font-weight:600;font-size:14px}
 
   <section class="card" aria-labelledby="h-api">
     <h2 id="h-api">What this app reads from Meraki</h2>
-    <p class="muted small">Every figure in a report comes from these Meraki Dashboard API calls. All are <b>GET</b> requests: the app only reads, it never changes anything in your Dashboard. A read-only API key is enough.</p>
+    <p class="muted small">Every figure in a report comes from these Meraki Dashboard API calls. All are <b>GET</b> requests: the app only reads and never changes anything in your Dashboard. A read-only admin API key is enough.</p>
     <details id="api-details"><summary>Show all <span id="api-count">—</span> endpoints</summary>
       <div class="tbl api"><table><thead><tr><th>Endpoint</th><th>What it reads</th><th>Shown in the report</th><th>How far back</th><th>Calls per snapshot</th></tr></thead><tbody id="api-rows"></tbody></table></div>
       <p class="muted small" style="margin-top:8px">N = access points, B = bands per AP, C = wireless clients, D = days in the period. A 14-day snapshot of a 3-AP network makes about 130 calls; most of a large site's calls go to roaming (one per client, up to 300).</p>

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Meraki WLAN health snapshot tool.
+"""Cisco Meraki WLAN Snapshot tool.
 
 Take a snapshot whenever you want a record of how the wireless network is
 doing (for example before an install). Each snapshot saves a data file and a
@@ -64,6 +64,7 @@ SOURCES = {
     "clientsNow": ("GET /organizations/{orgId}/wireless/clients/overview/byDevice", "Current state at capture time"),
     "ssids": ("GET /networks/{networkId}/wireless/ssids", "Current state at capture time"),
     "radius": ("GET /networks/{networkId}/events (802.1X success and RADIUS timeout events)", "Inferred from the snapshot window"),
+    "overrides": ("GET /organizations/{orgId}/wireless/radio/overrides/byDevice", "Current state at capture time"),
     "clientList": ("GET /networks/{networkId}/clients", "31 days"),
     "clientConn": ("GET /networks/{networkId}/wireless/clients/connectionStats", "180 days; 7 days per call"),
     "clientLatency": ("GET /networks/{networkId}/wireless/clients/latencyStats", "180 days; 7 days per call"),
@@ -89,8 +90,10 @@ ENDPOINTS = [
      "shows": "RF configuration", "lookback": "Current", "calls": "N"},
     {"area": "RF configuration", "path": "GET /networks/{networkId}/wireless/rfProfiles", "use": "Band steering, minimum bitrates, channel widths and flex-radio settings.",
      "shows": "RF configuration", "lookback": "Current", "calls": "1"},
-    {"area": "RF configuration", "path": "GET /organizations/{organizationId}/wireless/radio/rrm/byNetwork", "use": "AutoRF settings: AI-RRM, FRA, busy-hour behaviour.",
-     "shows": "RF configuration", "lookback": "Current", "calls": "1"},
+    {"area": "RF configuration", "path": "GET /organizations/{organizationId}/wireless/radio/rrm/byNetwork", "use": "AutoRF settings: whether AI-RRM is on and when it was enabled, FRA, busy-hour behaviour, channel avoidance.",
+     "shows": "AI-RRM tile, RF configuration", "lookback": "Current", "calls": "1"},
+    {"area": "RF configuration", "path": "GET /organizations/{organizationId}/wireless/radio/overrides/byDevice", "use": "Radios with a manually fixed channel, power or channel width. These are outside AI-RRM's control even when it's on.",
+     "shows": "AI-RRM tile", "lookback": "Current", "calls": "1+ (pages of 100)"},
     {"area": "RF configuration", "path": "GET /networks/{networkId}/wireless/airMarshal", "use": "Other networks your APs hear, with signal strength.",
      "shows": "Strong neighbouring networks", "lookback": "31 days (last 7 days used)", "calls": "1"},
     {"area": "RF configuration", "path": "GET /networks/{networkId}/wireless/ssids", "use": "Enabled SSIDs, their security mode and RADIUS servers.",
@@ -167,7 +170,8 @@ class Meraki:
         last = "too many retries (rate limited or server errors)"
         for attempt in range(6):
             self._throttle()
-            req = urllib.request.Request(url, headers={
+            # The only request this tool ever sends to Meraki: a GET. Nothing here can change the network.
+            req = urllib.request.Request(url, method="GET", headers={
                 "Authorization": "Bearer " + self.key,
                 "Accept": "application/json",
                 "User-Agent": "wlan-snapshot/" + VERSION,
@@ -378,6 +382,19 @@ def snapshot(m, args):
     snap["rfProfiles"] = [_profile_summary(p) for p in profiles]
     rrm = m.get("/organizations/%s/wireless/radio/rrm/byNetwork" % oid, {"networkIds": [nid]}, allow_fail=True)
     snap["autoRf"] = ((rrm or {}).get("items") or [None])[0]
+    try:   # radios with a fixed channel, power or width are outside AutoRF and AI-RRM
+        ov = m.get_all("/organizations/%s/wireless/radio/overrides/byDevice" % oid, {"perPage": 100})
+    except SystemExit:
+        ov = None
+    names = {a["serial"]: a["name"] for a in snap["aps"]}
+    snap["radioOverrides"] = [] if ov is not None else None
+    for x in ov or []:
+        if x.get("serial") not in names:
+            continue
+        fixed = [{"band": r.get("band"), "channel": r.get("channel"), "power": r.get("targetPower"), "width": r.get("channelWidth")}
+                 for r in x.get("radios") or [] if r.get("channel") is not None or r.get("targetPower") is not None or r.get("channelWidth") is not None]
+        if fixed:
+            snap["radioOverrides"].append({"serial": x["serial"], "ap": names[x["serial"]], "radios": fixed})
 
     log(" - per-radio utilization (10-minute)")
     snap["radioUtil"] = {}
@@ -813,7 +830,7 @@ def summarize(s):
            "networkId": s["network"]["id"], "org": s["org"]["name"],
            "notes": s.get("notes", []), "aps": s["aps"], "rfProfiles": s.get("rfProfiles"), "autoRf": s.get("autoRf"),
            "neighbors": s.get("neighbors"), "apiCalls": s.get("apiCalls"), "apiErrors": len(s.get("apiErrors", [])),
-           "ssids": s.get("ssids", [])}
+           "ssids": s.get("ssids", []), "radioOverrides": s.get("radioOverrides")}
     # clients
     daily = {b: mean([p["v"] for p in s["clients"].get(b, [])]) for b in ["all"] + BANDS}
     out["clients"] = {b: rnd(v) for b, v in daily.items()}

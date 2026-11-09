@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>WLAN health snapshot</title>
+<title>WLAN report</title>
 <style>
 /* Layout: one reading column. Findings first, then the scorecard, then each area with a plain-language callout. */
 :root{
@@ -27,7 +27,7 @@
   --call:#14252c;--call-line:#63b6d3;color-scheme:dark}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.55 var(--sans)}
-.wrap{max-width:1100px;margin:0 auto;padding-block:24px 64px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:flex;flex-direction:column;gap:28px}
+.wrap{max-width:1280px;margin:0 auto;padding-block:24px 64px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:flex;flex-direction:column;gap:28px}
 h1{font-size:26px;font-weight:650;margin:0;letter-spacing:-.01em;text-wrap:balance}
 h2{font-size:18px;font-weight:650;margin:0}
 h3{font-size:14px;font-weight:650;margin:0;display:flex;align-items:center}
@@ -95,6 +95,8 @@ details summary{cursor:pointer;color:var(--fg);font-weight:600}
 .src-list code{font-family:var(--mono);font-size:12px;color:var(--fg);word-break:break-all}
 input[type=file]{display:none}
 .exp{display:inline-flex;align-items:center;gap:6px}
+.disclaimer-r{margin-top:8px;border:1px solid var(--good);background:var(--good-bg);color:var(--fg);border-radius:8px;padding:8px 12px}
+.foot{text-align:center;margin-top:-8px}
 .modebtn{display:inline-flex;align-items:center;gap:7px;font-weight:600}
 @media print{
   @page{margin:12mm}
@@ -147,6 +149,9 @@ input[type=file]{display:none}
 .guide-h{display:flex;justify-content:space-between;align-items:center}
 .guide .x{border:0;background:transparent;font-size:20px;line-height:1;padding:0 4px;color:var(--muted)}
 .guide a{color:var(--accent)}
+.ptable{font-size:13px}.ptable td{vertical-align:top;white-space:nowrap}.ptable th{white-space:nowrap}
+.ptable td:first-child{white-space:normal;min-width:200px;max-width:320px;overflow-wrap:anywhere}
+.gbtn.sm{font-size:12px;padding:4px 10px;white-space:nowrap}
 .guide-acts{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-top:6px;padding-top:12px;border-top:1px solid var(--line)}
 .gbtn{font:inherit;font-size:14px;font-weight:600;display:inline-flex;align-items:center;gap:8px;padding:8px 14px;border-radius:8px;cursor:pointer;border:1px solid var(--accent);background:transparent;color:var(--accent)}
 .gbtn:hover{background:var(--call)}
@@ -422,7 +427,7 @@ function review(id,C){
   };
   return R[id];
 }
-let openTile=null, showG=false;
+let openTile=null, showG=false, showAllProblem=false;
 const isCross=(C,P)=>!!P&&(P.networkId&&C.networkId?P.networkId!==C.networkId:P.network!==C.network);
 const baseName=(C,P)=>isCross(C,P)?P.network:'Baseline';
 const curName=(C,P)=>isCross(C,P)?C.network:'This snapshot';
@@ -632,7 +637,7 @@ matchMedia('(prefers-color-scheme: dark)').addEventListener('change',()=>render(
 
 /* ---------- loading another snapshot ---------- */
 function addSnapshot(obj,name){
-  const sum=obj.summary;if(!obj||obj.tool!=='wlan-snapshot'||!sum)throw new Error(name+' is not a wlan-snapshot file, or it was made by an older version. Run "python3 wlan_snapshot.py report '+name+'" to upgrade it.');
+  const sum=obj&&obj.summary;if(!obj||obj.tool!=='wlan-snapshot'||!sum)throw new Error(name+' isn\u2019t a WLAN Snapshot file. Pick a report (.html) or data file (.json) saved by this app.');
   const hourly=obj.radioHourly||Object.fromEntries(Object.entries(obj.radioUtil||{}).map(([k,v])=>[k,v.hourly||[]]));
   const dup=SNAPS.findIndex(s=>s.summary.capturedAt===sum.capturedAt&&s.summary.network===sum.network);
   if(dup>=0)return dup;
@@ -641,11 +646,23 @@ function addSnapshot(obj,name){
   const curS=SNAPS[cur],baseS=base!=null?SNAPS[base]:null,newS=SNAPS[SNAPS.length-1];
   SNAPS=order.map(x=>x[0]);cur=SNAPS.indexOf(curS);base=baseS?SNAPS.indexOf(baseS):null;return SNAPS.indexOf(newS);
 }
-const fileInput=el('input',{type:'file',accept:'.json,application/json',id:'snapfile',onchange:e=>{
+/* Read snapshots from a data file (.json) or from any report (.html), which carries its data inside. */
+function snapshotsFromText(text,name){
+  const t=text.trimStart();
+  if(t.startsWith('{'))return[JSON.parse(t)];
+  const i=t.indexOf('const DATA=');if(i<0)throw new Error(name+' isn\u2019t a WLAN Snapshot report or data file.');
+  const j=t.indexOf(';\nconst PAGE_SOURCE',i),k=j>0?j:t.indexOf(';\n(function(){',i);
+  if(k<0)throw new Error(name+' looks like a report from an older version that can\u2019t be read back. Use its .json data file instead.');
+  const d=JSON.parse(t.slice(i+11,k));
+  return(d.snapshots||[]).map(x=>Object.assign({tool:'wlan-snapshot'},x));
+}
+const fileInput=el('input',{type:'file',accept:'.json,.html,.htm,application/json,text/html',id:'snapfile',onchange:e=>{
   const f=e.target.files[0];if(!f)return;const rd=new FileReader();
-  rd.onload=()=>{try{const i=addSnapshot(JSON.parse(rd.result),f.name);
-      const ti=SNAPS[i].summary.window.t1,tc=SNAPS[cur].summary.window.t1;
-      if(ti>tc){base=cur;cur=i}else{base=i}loadErr=''}catch(err){loadErr=err.message}render()};
+  rd.onload=()=>{try{const list=snapshotsFromText(rd.result,f.name);if(!list.length)throw new Error(f.name+' has no snapshots in it.');
+      const curS=SNAPS[cur];const idx=list.map(x=>addSnapshot(x,f.name));const C0=SNAPS.indexOf(curS);
+      const others=idx.filter(i=>i!==C0).sort((a,b)=>SNAPS[b].summary.window.t1.localeCompare(SNAPS[a].summary.window.t1));
+      if(others.length){const i=others[0];if(SNAPS[i].summary.window.t1>SNAPS[C0].summary.window.t1){base=C0;cur=i}else{cur=C0;base=i}}
+      loadErr=''}catch(err){loadErr=err.message}render()};
   rd.readAsText(f);e.target.value=''}});
 document.body.append(fileInput);
 
@@ -660,6 +677,12 @@ async function loadSaved(file){
 
 /* ---------- export ---------- */
 function safeName(t){return (t||'report').replace(/[^A-Za-z0-9_-]+/g,'-').replace(/^-+|-+$/g,'')}
+function exportData(){
+  const S=SNAPS[cur],C=S.summary;
+  const blob=new Blob([JSON.stringify({tool:'wlan-snapshot',summary:C,radioHourly:S.radioHourly||{},exportedAt:new Date().toISOString()})],{type:'application/json'});
+  const a=el('a',{href:URL.createObjectURL(blob),download:`${safeName(C.network)}-${safeName(C.label)}-${C.window.t1.slice(0,10)}.json`});
+  document.body.append(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},1000);
+}
 function exportHtml(){
   const C=SNAPS[cur].summary,P=base!=null?SNAPS[base].summary:null;
   const payload=Object.assign({},DATA,{snapshots:SNAPS,view:{cur,base},exportedAt:new Date().toISOString()});
@@ -688,6 +711,7 @@ function render(){
   const H=SNAPS[cur].radioHourly,HB=P?SNAPS[base].radioHourly:null;
   const cAcc=css('--accent'),cBase=css('--base');
   app.replaceChildren();
+  document.title=C.network+' WLAN report';
   app.classList.toggle('wide',!!drill&&!printing);
   const label=s=>`${s.summary.label} · ${win(s.summary)}`;
 
@@ -709,16 +733,17 @@ function render(){
     el('div',{class:'ctrls'},
       el('label',{for:'sel-cur'},'Snapshot',selCur),
       el('label',{for:'sel-base'},'Compare with',selBase),
-      el('button',{type:'button',onclick:()=>fileInput.click()},'Load snapshot file…'),
+      el('button',{type:'button',onclick:()=>fileInput.click(),title:'Compare with a report (.html) or data file (.json) saved by this app, from anywhere on your computer'},'Import snapshot…'),
       el('span',{class:'exp'},el('span',{class:'muted small'},'Export'),
-        el('button',{type:'button',onclick:exportHtml,title:'Download this report as a single HTML file, including any snapshot loaded for comparison'},'HTML'),
+        el('button',{type:'button',onclick:exportHtml,title:'Download this report as one HTML file. Keep it: it can be opened on its own, or loaded into a later report to compare.'},'HTML'),
+        el('button',{type:'button',onclick:exportData,title:'Download just this snapshot\u2019s data (.json): small, and loadable into a later report to compare'},'Data'),
         el('button',{type:'button',onclick:exportPdf,title:'Open the print dialog; choose Save as PDF'},'PDF')),
       loadErr?el('span',{class:'err'},loadErr):null),
     seg));
 
   /* header */
   app.append(el('header',{},
-    el('h1',{},C.network+' wireless health'),
+    el('h1',{},C.network+' WLAN report'),
     el('div',{class:'meta'},
       el('span',{},'Snapshot: ',el('b',{},win(C)),` (${C.label}, ${C.window.days} days)`,info([],el('span',{},el('b',{},'Period: '),`every number summarises these ${C.window.days} days, ending when the snapshot was taken on ${fd(C.capturedAt)}. AP status and radio settings are as of that moment. Meraki keeps per-radio detail for only 14 days, so a snapshot can only cover the recent past; saved snapshots can be compared however far apart they are.`))),
       P?el('span',{},'Compared with: ',el('b',{},isCross(C,P)?`${P.network}, ${win(P)}`:win(P)),` (${P.label})`):null,
@@ -748,6 +773,12 @@ function render(){
    const many=C.aps.length>3;
    const lines=r.list.length?el('div',{class:'s rlines'},r.list.map(x=>el('div',{},el('span',{class:'dot sm '+x.state}),`${x.ss.name} → ${x.ss.radiusServers.join(', ')||'no server'}`+(many?` · ${x.apsOk}/${C.aps.length} APs`:'')+(x.apsTo?` · ${x.apsTo} with timeouts`:'')))):el('div',{class:'s'},'No 802.1X SSIDs enabled');
    tiles.append(mkTile('radius','RADIUS servers',r.n?`${r.good}/${r.n} reachable`:'None',lines,null,r.list.some(x=>x.state==='bad')?' alertt':r.list.some(x=>x.state==='warn')?' warnt':''))}
+  {const ar=C.autoRf,on=ar&&ar.ai?!!ar.ai.enabled:null,ov=C.radioOverrides,nOv=ov?ov.reduce((t,x)=>t+x.radios.length,0):null;
+   const pon=P&&P.autoRf&&P.autoRf.ai?!!P.autoRf.ai.enabled:null;
+   const sub=on==null?'Not read in this snapshot':on?[ar.ai.lastEnabledAt?`On since ${fd(ar.ai.lastEnabledAt)}`:'On',nOv==null?null:nOv?`${nOv} radio${nOv>1?'s':''} fixed manually`:'No radios fixed manually'].filter(Boolean).join(' · '):'AutoRF without AI: Meraki\u2019s AI channel and power planning is not in use';
+   tiles.append(mkTile('airrm','AI-RRM',on==null?'—':on?'✅ On':'❌ Off',el('div',{class:'s'},sub),
+     P&&pon!=null&&on!=null?el('div',{class:'tchg'},el('span',{class:'chip '+(on===pon?'same':on?'good':'bad')},on===pon?'No change':on?'Turned on':'Turned off'),isCross(C,P)?el('span',{class:'muted small'},` ${P.network}: ${pon?'on':'off'}`):null):null,
+     on===false?' alertt':nOv?' warnt':''))}
   for(const t of TILES){const m=tileMetric(t),a=m.v(C),b=P?m.v(P):null,tr=P?trend(m,b,a):null,out=showG&&outside(m,a);
     tiles.append(mkTile(t.id,t.k,fmtVal(m,a),el('div',{class:'s'},t.sub(C)),
       P?el('div',{class:'tchg'},tr?el('span',{class:'chip '+tr.cls},tr.cls==='same'?'No change':fmtDelta(m,b,a)):el('span',{class:'muted small'},'—'),el('span',{class:'muted small'},' vs '+fmtVal(m,b))):null,
@@ -785,6 +816,25 @@ function render(){
     guide=el('div',{class:'guide'},el('div',{class:'guide-h'},el('b',{},'RADIUS servers',info(['ssids','radius'],'Meraki’s API has no read-only RADIUS health check. Reachability is worked out from the event log: a successful 802.1X login through an AP proves that AP reached the server; a RADIUS timeout means it didn’t.')),closeBtn()),
       r.list.length?box:el('p',{class:'muted'},'No 802.1X SSIDs are enabled, so no RADIUS servers are in use.'),
       el('ol',{},el('li',{},'Reachable: at least one login succeeded through that AP and none timed out.'),el('li',{},'Timeouts: the AP logged RADIUS timeouts. Check the route from that AP’s VLAN to the server and that the AP (or its subnet) is a RADIUS client (NAS) on the server.'),el('li',{},'No logins: nobody used 802.1X through that AP in this period, so reachability is unknown, not down.')))}
+  else if(openTile==='airrm'){
+    const ar=C.autoRf||{},on=ar.ai?!!ar.ai.enabled:null,ov=C.radioOverrides||[],bh=ar.busyHour||{},sch=(bh.schedule||{})[bh.mode==='manual'?'manual':'automatic']||{};
+    const yes=v=>v==null?'—':v?'✅ On':'❌ Off';
+    const rows=[['AI-RRM',yes(on),on&&ar.ai.lastEnabledAt?`Enabled ${fd(ar.ai.lastEnabledAt)}`:'Meraki\u2019s AI-based channel and power planning for this network.'],
+      ['Flexible radio assignment (FRA)',yes(ar.fra?ar.fra.enabled:null),'Lets AutoRF switch a flexible radio between bands. Only works while AI-RRM is on.'],
+      ['Minimise changes in busy hours',yes(bh.minimizeChanges?bh.minimizeChanges.enabled:null),sch.start?`Busy hours ${sch.start}–${sch.end} (${bh.mode||'automatic'})`:'Avoids changing channels while the network is busy.'],
+      ['Channel avoidance',yes(ar.channel&&ar.channel.avoidance?ar.channel.avoidance.enabled:null),'Moves radios away from channels with interference or radar.'],
+      ['6 GHz channel selection',ar.channel&&ar.channel.selection&&ar.channel.selection.preferred?ar.channel.selection.preferred.mode:'—','Automatic lets RRM decide when non-PSC 6 GHz channels are used; enforced keeps 6 GHz on PSC channels only.']];
+    const st=el('table',{class:'dtable'},el('tbody',{},rows.map(([a,b,c])=>el('tr',{},el('td',{},el('b',{},a)),el('td',{class:'num',style:'white-space:nowrap'},b),el('td',{class:'muted',style:'white-space:normal'},c)))));
+    const ovt=ov.length?el('table',{class:'dtable'},el('thead',{},el('tr',{},['AP','Band','Fixed channel','Fixed power','Fixed width'].map(h=>el('th',{style:'padding:6px 8px'},h)))),
+      el('tbody',{},ov.flatMap(x=>x.radios.map(r=>el('tr',{},el('td',{},x.ap),el('td',{},band(r.band)),el('td',{},r.channel??'auto'),el('td',{},r.power!=null?r.power+' dBm':'auto'),el('td',{},r.width??'auto')))))):
+      el('p',{class:'muted small'},C.radioOverrides?'No radio has a manually fixed channel, power or width, so AutoRF manages every radio.':'This snapshot was taken before radio overrides were checked. Take a new snapshot to see them.');
+    guide=el('div',{class:'guide'},el('div',{class:'guide-h'},el('b',{},'AI-RRM and AutoRF',info(['rrm','overrides'],'Read when the snapshot was taken.')),closeBtn()),
+      el('p',{},on===false?'AI-RRM is off. It\u2019s a commonly missed setting behind complaints about Wi-Fi performance: without it, AutoRF still runs but doesn\u2019t use Meraki\u2019s AI-based channel and power planning.':on?'AI-RRM is on: Meraki\u2019s AI-based planning sets channels and power for every radio it\u2019s allowed to manage.':'AutoRF settings weren\u2019t read in this snapshot.'),
+      st,el('h3',{style:'margin-top:6px'},`Radios fixed manually${ov.length?` (${ov.reduce((t,x)=>t+x.radios.length,0)})`:''}`),
+      el('p',{class:'muted small'},'A fixed channel, power or width takes that radio out of AutoRF and AI-RRM, even when AI-RRM is on.'),ovt,
+      el('ol',{},on===false?el('li',{},'Turn on AI-RRM in Dashboard: Wireless › Radio settings › AI-RRM. Check your licensing and firmware meet Meraki\u2019s requirements for it first.'):null,
+        ov.length?el('li',{},'Review each fixed radio: remove the fixed values unless there\u2019s a deliberate reason for them (Wireless › Radio settings, per AP).'):null,
+        el('li',{},'Take another snapshot a week or two after a change and compare: busiest radio, weakest client signal and roaming should improve.')))}
   else if(openTile){const t=TILES.find(x=>x.id===openTile),r=review(t.id,C),m=tileMetric(t);
     guide=el('div',{class:'guide',role:'region','aria-label':'Review guide for '+t.k},
       el('div',{class:'guide-h'},el('b',{},'Review guide: '+t.k),closeBtn()),
@@ -794,6 +844,39 @@ function render(){
   app.append(el('section',{id:'overview'},el('div',{class:'sec-head'},el('h2',{},'Overview'),
       el('p',{class:'muted small'},P?(isCross(C,P)?`Each tile shows ${C.network} against ${P.network}. Green better, red worse, grey about the same. Click a tile for details and what to review.`:'Each tile shows this snapshot and its change from the baseline. Green improved, red got worse, grey no change. Click a tile for details and what to review.'):'The key numbers for this snapshot. Click a tile for details and what to review.')),
     tiles,guide));
+
+  /* clients causing the most problems: right under the overview, so the cause sits next to the symptoms */
+  {const totP=(C.rates.disconnects||0)+(C.rates.dot1xFailures||0);
+   const rows0=C.clientRows?C.clientRows.map(r=>({...r,problems:(r.disconnects||0)+(r.dot1x||0)})):(C.events.topClients||[]).map(c=>({mac:c.client,name:c.client,problems:c.events}));
+   const roam=Object.fromEntries((get(C,'roaming.clients')||[]).map(c=>[c.mac,c]));
+   const rows=rows0.filter(r=>r.problems>0).sort((a,b)=>b.problems-a.problems);
+   const shown=rows.slice(0,showAllProblem?25:5);
+   const top3=rows.slice(0,3).reduce((t,r)=>t+r.problems,0);
+   const hasLogs=mac=>!!get(C,['roaming','logs',mac]);
+   const body=el('tbody',{},shown.map((r,i)=>{const ro=roam[r.mac];
+     return el('tr',{},
+       el('td',{},el('b',{},r.name||r.mac),el('div',{class:'muted small'},[r.name&&r.name!==r.mac?r.mac:null,r.manufacturer,r.os].filter(Boolean).join(' · '))),
+       el('td',{},r.ap||'—'),
+       el('td',{class:'num'},el('b',{},nf(r.problems,0)),el('div',{class:'muted small'},totP?nf(100*r.problems/totP,0)+'% of all':'')),
+       el('td',{class:'num'},r.disconnects!=null?nf(r.disconnects/days(C),0):'—'),
+       el('td',{class:'num'},r.dot1x!=null?nf(r.dot1x,0):'—'),
+       el('td',{class:'num'},r.auth!=null?nf(r.auth,0):'—'),
+       el('td',{class:'num'},ro?el('span',{},ro.bad?el('span',{class:'qb bad'},ro.bad+' bad'):null,ro.sub?el('span',{class:'qb sub'},ro.sub+' sub'):null,!ro.bad&&!ro.sub?el('span',{class:'muted'},`${ro.roams} good`):null):el('span',{class:'muted'},'—')),
+       el('td',{class:'num'},r.upLossPct!=null?nf(r.upLossPct,1)+'%':'—'),
+       el('td',{},hasLogs(r.mac)?el('button',{type:'button',class:'gbtn sm',onclick:()=>showRoamClient(r.mac)},'Roams →'):null))}));
+   const lines=[];
+   if(rows.length&&totP)lines.push(`The top 3 clients cause ${nf(100*top3/totP,0)}% of all disconnect and 802.1X events. When a few devices dominate like this, start with those devices (driver, power saving, location) before changing the network.`);
+   if(rows[0]&&rows[0].ap)lines.push(`${rows[0].name||rows[0].mac} is the worst, last seen on ${rows[0].ap}.`);
+   if(rows.slice(0,shown.length).some(r=>/synthetic client/i.test(r.name||'')))lines.push('“(synthetic client)” entries are Meraki\u2019s own test clients, run by the APs to check the network; they aren\u2019t user devices. Their disconnects are part of the test, so they can be set aside.');
+   lines.push('Names with a long code or a private (randomised) MAC are phones and laptops hiding their real address; one device can appear more than once.');
+   app.append(el('section',{id:'problem-clients'},
+     el('div',{class:'sec-head'},el('div',{class:'sec-row'},el('h2',{},'Clients causing the most problems'),
+        rows.length>5?el('button',{type:'button',onclick:()=>{showAllProblem=!showAllProblem;render();goTo('problem-clients')}},showAllProblem?'Show top 5':`Show top ${Math.min(25,rows.length)}`):null),
+       el('p',{class:'muted small'},'Ranked by problem events (disconnects plus 802.1X failures) in this period, with everything else known about each client. Full lists sit behind each scorecard row.')),
+     rows.length?el('div',{class:'card'},callout(lines),el('div',{class:'tbl-wrap',style:'margin-top:10px'},el('table',{class:'ptable'},
+       el('thead',{},el('tr',{},[['Client'],['Last AP'],['Problem events',1],['Disconnects / day',1],['802.1X failures',1],['Auth failures',1],['Roaming',1],['Upstream loss',1],['']].map(([h,n])=>el('th',{class:n?'num':null},h)),
+         )),body))):el('div',{class:'callout'},el('p',{},'No client logged any disconnects or 802.1X failures in this period.'))));
+  }
 
   /* scorecard */
   const tb=el('tbody');
@@ -997,16 +1080,13 @@ function render(){
   const probAp=(S,ap)=>{const x=(S.events.byAp||{})[ap]||{};return['disassociation','wpa_deauth','8021x_deauth','8021x_eap_failure','8021x_radius_timeout','8021x_client_timeout'].reduce((t,k)=>t+(x[k]||0),0)/days(S)};
   const apN=[...new Set([...Object.keys(C.events.byAp||{}),...(P?Object.keys(P.events.byAp||{}):[])])].filter(x=>x!=='unknown');
   const apRows=apN.map(ap=>[ap,P?probAp(P,ap):null,probAp(C,ap)]).sort((x,y)=>y[2]-x[2]);
-  const ttb=el('tbody');const totP=(C.rates.disconnects||0)+(C.rates.dot1xFailures||0);
-  for(const c of (C.events.topClients||[]).slice(0,8))ttb.append(el('tr',{},el('td',{style:'font-family:var(--mono);font-size:13px'},c.client),el('td',{class:'num'},nf(c.events,0)),el('td',{class:'num muted'},totP?nf(100*c.events/totP,0)+'%':'—')));
   app.append(el('section',{id:'issues'},el('div',{class:'sec-head'},el('h2',{},'Client issues'),el('p',{class:'muted small'},'Failed joins and disconnects, averaged per day so snapshots of different lengths compare fairly.')),
     callout(calloutIssues(C,P)),
     el('div',{class:'grid'},
       bars('Failed joins by stage, per day','connections',stg,v=>nf(v,0),'Where joins failed: radio association, PSK or 802.1X authentication, getting an IP address, or DNS.'),
       bars('Disconnect and 802.1X events, per day','events',evs,v=>nf(v,0),'From the wireless event log. Fast roams are shown for context; they are healthy.'),
-      bars('Problem events per AP, per day','events',apRows,v=>nf(v,0),'Disconnects plus 802.1X failures logged against each AP.'),
-      el('div',{class:'card'},el('h3',{},'Clients with the most problem events',info('events','Counted by client MAC. Phones with random MACs can appear as several clients.')),
-        el('div',{class:'tbl-wrap',style:'margin-top:8px'},el('table',{},el('thead',{},el('tr',{},el('th',{},'Client MAC'),el('th',{class:'num'},'Events'),el('th',{class:'num'},'Share'))),ttb))))));
+      bars('Problem events per AP, per day','events',apRows,v=>nf(v,0),'Disconnects plus 802.1X failures logged against each AP.')),
+    el('p',{class:'muted small'},'The clients behind these events are listed under ',el('a',{href:'#problem-clients',onclick:e=>{e.preventDefault();goTo('problem-clients')}},'Clients causing the most problems'),', near the top.')));
 
   /* sources */
   const EP=DATA.endpoints||[];let area='';
@@ -1016,10 +1096,12 @@ function render(){
       rows.push(el('tr',{},el('td',{},el('code',{},e.path)),el('td',{},e.use),el('td',{},e.shows),el('td',{},e.lookback),el('td',{},e.calls)));return rows})))):
     (()=>{const l=el('div',{class:'src-list'});for(const[,[ep,lb]]of Object.entries(SRC))l.append(el('code',{},ep),el('span',{},lb));return l})();
   app.append(el('details',{},el('summary',{},'Sources and method: every Meraki API endpoint used'),
+    el('p',{class:'disclaimer-r'},el('b',{},'Read-only. '),'This tool only sends GET requests to the Meraki Dashboard API. It never sends POST, PUT, PATCH or DELETE requests, so it makes no changes to your Meraki environment. A read-only admin API key is all it needs.'),
     el('p',{style:'margin-top:8px'},`Every figure comes from read-only Meraki Dashboard API v1 calls made when the snapshot was taken (${C.apiCalls} calls, ${C.apiErrors} refused). Snapshots are saved as files, so this report stays valid after Meraki deletes the underlying data.`),
     el('p',{style:'margin-top:6px'},'“No change” means the difference is within normal day-to-day variation for that metric. Targets are rules of thumb, not Meraki thresholds.'),
     list,EP.length?el('p',{style:'margin-top:6px'},'N = access points, B = bands per AP, C = wireless clients, D = days in the period. Wireless event types read: '+Object.keys(EVT).join(', ')+'.'):null,(C.notes||[]).length?el('p',{style:'margin-top:8px'},'Notes: '+C.notes.join(' ')):null,
     el('p',{style:'margin-top:8px'},`Snapshot taken ${fd(C.capturedAt)}. Report generated ${fd(DATA.generatedAt)}.`)));
+  app.append(el('p',{class:'foot muted small'},'Cisco Meraki WLAN Snapshot · Read-only: GET requests only, no changes made to your Meraki environment.'));
 }
 render();
 })();

@@ -1,8 +1,8 @@
 # Cisco Meraki WLAN Snapshot
 
-A small app that runs on your own computer and takes a health snapshot of a Meraki wireless network. Each snapshot is saved as a file with its own report:
+A small app that runs on your own computer and takes a WLAN snapshot of a Meraki wireless network. Each snapshot is saved as a file with its own report:
 
-- **Overview:** access points online, RADIUS servers reachable, connection success, auth failures, disconnects, busiest radio, weakest client signal, packet loss, slow voice traffic, good roams and clients per day. Click any tile for what it means and what to review.
+- **Overview:** access points online, RADIUS servers reachable, AI-RRM on or off (and any radios fixed manually, outside its control), connection success, auth failures, disconnects, busiest radio, weakest client signal, packet loss, slow voice traffic, good roams and clients per day. Click any tile for what it means and what to review.
 - **Scorecard:** 21 metrics, each with a plain-language explanation and a daily trend line. Click any row to see the clients, radios, APs or neighbouring networks behind that number.
 - **RF configuration:** band, channel, width, power and SSIDs of every radio, plus RF profile, AutoRF and neighbouring networks.
 - **By band:** how 2.4, 5 and 6 GHz each perform.
@@ -14,12 +14,12 @@ Take a snapshot before an install and another after, or one every month. Open an
 
 Meraki only keeps detailed wireless history for a short time: per-radio utilization for 14 days, most other history for 31 days. Saving snapshots as files means you can compare against a point in time long after Meraki has deleted that data.
 
-> **Read-only:** this tool only sends GET (read) requests to the Meraki Dashboard API. It never sends POST, PUT or DELETE requests, so it can't change anything in your Meraki Dashboard.
+> **Disclaimer: read-only.** This tool only sends GET (read) requests to the Meraki Dashboard API. It never sends POST, PUT, PATCH or DELETE requests and pushes no changes whatsoever, so it can't change any setting, device or network in your Meraki environment. A **read-only admin API key** is sufficient, and is recommended.
 
 ## Requirements
 
 - **Python 3.8 or newer.** If it's missing, the launcher offers to install it: on Windows through Windows Package Manager (just for your account, no admin rights needed), and on a Mac through Apple's Command Line Tools installer. You can also get it from <https://www.python.org/downloads/>. On Windows, tick **"Add python.exe to PATH"** during install. No other packages are needed.
-- **A Meraki Dashboard API key.** A read-only admin is enough. See [how to create an API key](https://developer.cisco.com/meraki/api-v1/authorization/).
+- **A Meraki Dashboard API key.** A key for a read-only admin is enough, because the tool never makes changes. See [how to create an API key](https://developer.cisco.com/meraki/api-v1/authorization/).
 
 ## Start it
 
@@ -49,11 +49,17 @@ Each snapshot saves two files in the `snapshots` folder:
 
 **The period** is how much history a snapshot captures, counting back from when you click Generate report. The default and maximum is 14 days, because Meraki keeps per-radio detail for only 14 days. Use the same period every time so snapshots compare fairly. AP status and radio settings are read at the moment of capture.
 
-**Comparing:** open a report through the app and pick another snapshot of the same network under **Compare with**, or use **Load snapshot file…** to pick a `.json` from anywhere. A single snapshot shows values with no judgement; a comparison colours each change **green** (better), **red** (worse) or **grey** (no change beyond normal day-to-day variation). Snapshots can be any distance apart, today and a year from now. The report warns you if two periods overlap or are different lengths.
+**Comparing:** open a report through the app and pick another snapshot of the same network under **Compare with**, or use **Import snapshot…** to pick a `.json` from anywhere. A single snapshot shows values with no judgement; a comparison colours each change **green** (better), **red** (worse) or **grey** (no change beyond normal day-to-day variation). Snapshots can be any distance apart, today and a year from now. The report warns you if two periods overlap or are different lengths.
 
 **Comparing with another network:** the **Compare with** list also shows snapshots of your other wireless networks, under **Other networks**. The report then puts the two networks side by side: columns are named after each network, green means this network does better and red means it does worse. AP-by-AP sections (radio settings, per-radio utilization) show this network only, because the APs are different. Networks differ in size, layout and use, so treat differences as prompts to look rather than verdicts. Use snapshots of the same period length.
 
-**Exporting:** **Export › HTML** downloads the report as one self-contained file, including any snapshot loaded for comparison. **Export › PDF** opens your browser's print dialog with a print layout; choose **Save as PDF**.
+**Exporting and keeping snapshots:** every report has **Export**:
+
+- **HTML:** the report as one self-contained file. It opens on its own in any browser, and it can be loaded into a later report to compare, so it's a safe way to keep a snapshot. If a comparison is showing, the file holds both snapshots.
+- **Data:** just the snapshot's data as a small `.json`, also loadable later.
+- **PDF:** opens your browser's print dialog with a print layout; choose **Save as PDF**. PDFs are for reading and can't be loaded back.
+
+**Import snapshot…** in any report accepts a report (`.html`) or data file (`.json`) saved by this app, from anywhere on your computer. You don't need to export anything to compare on the same computer: every snapshot is already saved in the `snapshots` folder and listed under **Compare with**. Export when you want a copy somewhere else, for example a project folder, a shared drive or an email.
 
 ## Meraki API endpoints used
 
@@ -69,7 +75,8 @@ Every figure in a report comes from these calls. The same list is shown in the a
 | RF configuration | `GET /devices/{serial}/wireless/status` | Each radio's band, channel, channel width, transmit power and the SSIDs it broadcasts. | RF configuration; also works out which radio is which band | Current | N |
 | RF configuration | `GET /devices/{serial}/wireless/radio/settings` | Which RF profile each AP uses and any manual channel or power overrides. | RF configuration | Current | N |
 | RF configuration | `GET /networks/{networkId}/wireless/rfProfiles` | Band steering, minimum bitrates, channel widths and flex-radio settings. | RF configuration | Current | 1 |
-| RF configuration | `GET /organizations/{organizationId}/wireless/radio/rrm/byNetwork` | AutoRF settings: AI-RRM, FRA, busy-hour behaviour. | RF configuration | Current | 1 |
+| RF configuration | `GET /organizations/{organizationId}/wireless/radio/rrm/byNetwork` | AutoRF settings: whether AI-RRM is on and when it was enabled, FRA, busy-hour behaviour, channel avoidance. | AI-RRM tile, RF configuration | Current | 1 |
+| RF configuration | `GET /organizations/{organizationId}/wireless/radio/overrides/byDevice` | Radios with a manually fixed channel, power or channel width. These are outside AI-RRM's control even when it's on. | AI-RRM tile | Current | 1+ (pages of 100) |
 | RF configuration | `GET /networks/{networkId}/wireless/airMarshal` | Other networks your APs hear, with signal strength. | Strong neighbouring networks | 31 days (last 7 days used) | 1 |
 | RF configuration | `GET /networks/{networkId}/wireless/ssids` | Enabled SSIDs, their security mode and RADIUS servers. | RADIUS servers tile | Current | 1 |
 | Radio utilization | `GET /networks/{networkId}/networkHealth/channelUtilization` | How busy every radio is, in 10-minute samples, including non-Wi-Fi interference. Each 5 GHz radio on dual-5 GHz APs separately. | Busiest radio tile, radio utilization, scorecard | 14 days (Meraki refuses older 10-minute data) | 2 (7-day pages) |
@@ -95,6 +102,7 @@ Wireless event types read from the event log: `disassociation`, `wpa_deauth`, `8
 | Metric | Calculation | From |
 |---|---|---|
 | Access points online | APs whose status is `online`, out of all APs in the network | `devices/statuses` |
+| AI-RRM | On or off for the network, from `ai.enabled`, with the date it was enabled. Radios with a fixed channel, power or width are listed, because AutoRF and AI-RRM can't manage them | `wireless/radio/rrm/byNetwork`, `wireless/radio/overrides/byDevice` |
 | RADIUS servers reachable | A server counts as reachable when at least one AP logged a successful 802.1X login through it; APs with RADIUS timeouts are listed as warnings | `wireless/ssids`, `events` |
 | Connection success | Successful joins ÷ (successful + failed at association, authentication, DHCP or DNS) | `wireless/connectionStats` |
 | Auth failure rate | Joins failed at authentication ÷ all join attempts | `wireless/connectionStats` |

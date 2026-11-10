@@ -314,6 +314,8 @@ section,details{scroll-margin-top:52px}
 .sp-day{flex:1 0 34px;display:flex;flex-direction:column;align-items:center;gap:4px}
 .sp-day .stack{height:120px;width:100%;max-width:36px;display:flex;flex-direction:column;justify-content:flex-end;background:var(--soft);border-radius:4px;overflow:hidden}
 .sp-day .wifi{background:var(--accent);display:block}.sp-day .non{background:var(--nw);display:block}
+.apx{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:10px}@media (max-width:800px){.apx{grid-template-columns:1fr}}
+.alist{list-style:none;padding:0;margin:6px 0 0;display:grid;gap:6px}.alist li{display:flex;gap:8px;align-items:flex-start}.alist .dot{margin-top:6px}
 </style>
 </head>
 <body>
@@ -339,6 +341,28 @@ const win=S=>fds(S.window.t0)+' – '+fd(S.window.t1);
 const css=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
 const days=S=>S.window.days;
 const band=b=>b+' GHz';
+const apUptime=S=>{const av=S.availability;if(!av)return null;const L=Object.values(av.byAp||{}),out=L.reduce((t,x)=>t+(x.offline||0),0);
+  if(!L.length)return `no outages in ${days(S)} days`;const worst=L.slice().sort((a,b)=>(a.uptimePct??100)-(b.uptimePct??100))[0];
+  return `${out} outage${out===1?'':'s'} · lowest uptime ${nf(worst.uptimePct,2)}% (${worst.ap})`};
+const fwLine=S=>{const f=S.firmware;if(!f||!f.current)return null;const ls=f.latestStable;
+  return `${f.current.name}${f.current.type&&f.current.type!=='stable'?' ('+f.current.type+')':''}`+(ls&&ls.name!==f.current.name&&(ls.date||'')>(f.current.date||'')?` · stable ${ls.name} available`:'')};
+const fwMixed=S=>{const v=new Set((S.aps||[]).map(a=>a.firmware).filter(x=>x&&x!=='Not running configured version'));return v.size>1?[...v]:null};
+function apExtras(C){
+  const f=C.firmware,al=C.healthAlerts,av=C.availability,mixed=fwMixed(C);
+  const fwRows=f&&f.current?[['Running',`${f.current.name} (${f.current.type||'—'}${f.current.date?', released '+fds(f.current.date):''})`],
+    ['Latest stable',f.latestStable?`${f.latestStable.name}${f.latestStable.date?' ('+fds(f.latestStable.date)+')':''}`:'—'],
+    ['Newer releases',(f.newer||[]).length?f.newer.map(v=>`${v.name} (${v.type})`).join(', '):'None'],
+    ['Next upgrade',f.nextUpgrade?`${fd(f.nextUpgrade.time)} to ${(f.nextUpgrade.to||{}).name||'—'}`:'None scheduled'],
+    ['Last upgrade',f.lastUpgrade?`${fd(f.lastUpgrade.time)}: ${(f.lastUpgrade.from||{}).name||'—'} → ${(f.lastUpgrade.to||{}).name||'—'}`:'—'],
+    mixed?['APs on different versions',mixed.join(', ')]:null].filter(Boolean):[];
+  const outages=av?Object.values(av.byAp||{}).filter(x=>x.offline||x.notOnlineMin):[];
+  return el('div',{class:'apx'},
+    el('div',{},el('h3',{},'Firmware',info('firmware')),fwRows.length?el('table',{class:'dtable'},el('tbody',{},fwRows.map(([a,b])=>el('tr',{},el('td',{},el('b',{},a)),el('td',{style:'white-space:normal'},b))))):el('p',{class:'muted small'},'Take a new snapshot to see firmware detail.')),
+    el('div',{},el('h3',{},'Meraki health alerts',info('alerts','Alerts Dashboard shows under Assurance / Health that were open when the snapshot was taken, for this network’s wireless devices.')),
+      al==null?el('p',{class:'muted small'},'Take a new snapshot to see Meraki’s health alerts.'):al.length?el('ul',{class:'alist'},al.map(a=>el('li',{},el('span',{class:'dot '+(/critical|error/i.test(a.severity||'')?'bad':'warn')}),el('div',{},el('b',{},a.title||a.type),el('div',{class:'muted small'},[a.devices.join(', '),a.startedAt?'since '+fd(a.startedAt):null,a.description].filter(Boolean).join(' · ')))))):el('p',{class:'muted small'},'No open health alerts for wireless devices.'),
+      el('h3',{style:'margin-top:10px'},'Outages in this period',info('availability')),
+      av==null?el('p',{class:'muted small'},'Take a new snapshot to see uptime.'):outages.length?el('ul',{class:'alist'},outages.map(x=>el('li',{},el('span',{class:'dot bad'}),el('div',{},el('b',{},x.ap),el('div',{class:'muted small'},`${x.offline} time${x.offline===1?'':'s'} offline · ${nf(x.notOnlineMin,0)} min not online · uptime ${nf(x.uptimePct,2)}%`+(x.changes.length?` · last change ${fds(x.changes[x.changes.length-1].ts)}: ${x.changes[x.changes.length-1].from||'?'} → ${x.changes[x.changes.length-1].to||'?'}`:'')))))):el('p',{class:'muted small'},`Every AP stayed online for all ${days(C)} days.`)));
+}
 const regionName=c=>{try{return c?new Intl.DisplayNames(['en'],{type:'region'}).of(String(c).toUpperCase()):'—'}catch(e){return c||'—'}};
 
 function info(keys,extra){
@@ -887,7 +911,7 @@ function render(){
   {const a=apStat(C),pa=P?apStat(P):null;
    const down=C.aps.filter(x=>x.status&&x.status!=='online');
    tiles.append(mkTile('aps','Access points',a.known?`${a.on}/${a.n} online`:`${a.n} APs`,
-     el('div',{class:'s'},!down.length?`${nf(a.now,0)} clients connected now`:down.length<=2?down.map(x=>`${x.name}: ${x.status}`).join(' · '):[['offline','offline'],['alerting','alerting'],['dormant','dormant']].map(([k,l])=>{const c=down.filter(x=>x.status===k).length;return c?`${c} ${l}`:''}).filter(Boolean).join(' · ')+' · click for the list'),
+     el('div',{class:'s'},!down.length?[`${nf(a.now,0)} clients connected now`,apUptime(C),fwLine(C)].filter(Boolean).join(' · '):down.length<=2?down.map(x=>`${x.name}: ${x.status}`).join(' · '):[['offline','offline'],['alerting','alerting'],['dormant','dormant']].map(([k,l])=>{const c=down.filter(x=>x.status===k).length;return c?`${c} ${l}`:''}).filter(Boolean).join(' · ')+' · click for the list'),
      pa&&pa.known&&!isCross(C,P)?el('div',{class:'tchg'},el('span',{class:'chip '+(a.on===pa.on?'same':a.on>pa.on?'good':'bad')},a.on===pa.on?'No change':(a.on>pa.on?'+':'−')+Math.abs(a.on-pa.on)+' online'),el('span',{class:'muted small'},` vs ${pa.on}/${pa.n}`)):null,
      down.length?' alertt':''))}
   {const r=radStat(C);
@@ -941,8 +965,10 @@ function render(){
       miniTable({id:'ap-list',rows,search:'Find an AP by name, model or IP…',
         chips:[['all','All',()=>true],['online','Online',r=>r.st==='online'],['alerting','Alerting',r=>r.st==='alerting'],['offline','Offline',r=>r.st==='offline']],
         cols:[{l:'Status',f:r=>el('span',{class:'stcell'},el('span',{class:'dot '+stCls(r.st)}),r.st[0].toUpperCase()+r.st.slice(1))},{l:'AP',f:r=>el('b',{},r.name)},{l:'Model',f:r=>r.model||'—'},{l:'Firmware',f:r=>r.firmware||'—'},
-          {l:'Clients now',num:1,f:r=>r.clientsNow==null?'—':nf(r.clientsNow,0)},{l:'LAN IP',f:r=>el('span',{class:'mono small'},r.lanIp||'—')},{l:'Last seen',f:r=>r.st!=='online'&&r.lastReportedAt?fd(r.lastReportedAt):'—'}],
+          {l:'Clients now',num:1,f:r=>r.clientsNow==null?'—':nf(r.clientsNow,0)},
+          {l:`Uptime (${days(C)} d)`,num:1,f:r=>{const x=get(C,['availability','byAp',r.serial]);return !C.availability?'—':x?el('span',{title:`${x.offline} outage(s), ${nf(x.notOnlineMin,0)} min not online`},nf(x.uptimePct,2)+'%'):'100%'}},{l:'LAN IP',f:r=>el('span',{class:'mono small'},r.lanIp||'—')},{l:'Last seen',f:r=>r.st!=='online'&&r.lastReportedAt?fd(r.lastReportedAt):'—'}],
         text:r=>[r.name,r.model,r.lanIp,r.firmware,r.st].join(' ')}),
+      apExtras(C),
       el('ol',{},el('li',{},'Offline or alerting APs: check power (PoE budget on the switch port), the uplink and the AP’s event log in Dashboard.'),el('li',{},'Uneven client counts can be normal (meeting rooms, entrances) or a sign of one AP holding clients that should roam.')))}
   else if(openTile==='radius'){
     const r=radStat(C),box=el('div',{class:'radlist'});
@@ -1075,6 +1101,12 @@ function render(){
     if(rg&&(!rg.countryCode||rg.countryCode==='default'))att.push(['bad','No country is set for this network: Meraki’s default regulatory domain restricts channels and power and keeps 6 GHz off.','Regulatory domain',openT('regulatory')]);
     else if(rg&&!rg.permits6e&&n6)att.push(['bad',`6 GHz isn’t permitted in ${regionName(rg.countryCode)}, yet ${n6} radio${n6>1?'s are':' is'} on 6 GHz. Check the network’s country.`,'Regulatory domain',openT('regulatory')]);
     else if(rg&&rg.permits6e&&!n6)att.push(['warn',`6 GHz is permitted in ${regionName(rg.countryCode)} but no radio is using it.`,'Regulatory domain',openT('regulatory')])}
+   for(const a of (C.healthAlerts||[]))att.push([/critical|error/i.test(a.severity||'')?'bad':'warn',`Meraki health alert: ${a.title||a.type}`+(a.devices.length?` (${a.devices.slice(0,3).join(', ')}${a.devices.length>3?'…':''})`:'')+(a.startedAt?`, open since ${fds(a.startedAt)}`:'')+'.','Access points',openT('aps')]);
+   {const L=Object.values((C.availability||{}).byAp||{}).filter(x=>x.offline);if(L.length)att.push(['bad',`${L.length} AP${L.length>1?'s':''} went offline during the period: ${L.slice(0,3).map(x=>`${x.ap} (${x.offline}×, ${nf(x.notOnlineMin,0)} min)`).join(', ')}${L.length>3?'…':''}.`,'Access points',openT('aps')])}
+   {const f=C.firmware,mx=fwMixed(C);
+    if(f&&f.current&&f.latestStable&&f.latestStable.name!==f.current.name&&(f.latestStable.date||'')>(f.current.date||''))att.push(['warn',`A newer stable firmware is available: ${f.latestStable.name} (running ${f.current.name}).`,'Access points',openT('aps')]);
+    if(f&&f.current&&f.current.type&&f.current.type!=='stable')att.push(['warn',`The network runs ${f.current.type} firmware ${f.current.name}, not a stable release.`,'Access points',openT('aps')]);
+    if(mx)att.push(['warn',`APs run different firmware versions: ${mx.join(', ')}.`,'Access points',openT('aps')])}
    const ar=C.autoRf;if(ar&&ar.ai&&ar.ai.enabled===false)att.push(['warn','AI-RRM is off, so Meraki’s AI channel and power planning isn’t used.','AI-RRM',openT('airrm')]);
    const nOv=(C.radioOverrides||[]).reduce((t,x)=>t+x.radios.length,0);if(nOv)att.push(['warn',`${nOv} radio${nOv>1?'s have':' has'} a manually fixed channel, power or width, outside AutoRF’s control.`,'AI-RRM',openT('airrm')]);
    const pr=problemRows(C).filter(x=>!isSynthetic(x)),pT=(C.rates.disconnects||0)+(C.rates.dot1xFailures||0);
@@ -1087,7 +1119,7 @@ function render(){
    att.sort((a,b)=>(a[0]==='bad'?0:1)-(b[0]==='bad'?0:1))}
   const attBox=el('div',{class:'attn'+(att.length?'':' clear')},
     el('div',{class:'attn-h'},el('b',{},att.length?`${att.length} thing${att.length>1?'s':''} to look at`:'Nothing needs attention'),
-      el('span',{class:'muted small'},att.length?' Facts from this snapshot, most serious first. Healthy items are left out.':' All APs online, RADIUS reachable, no rogue or spoofed networks, AI-RRM on, and no client stands out.')),
+      el('span',{class:'muted small'},att.length?' Facts from this snapshot, most serious first. Healthy items are left out.':' All APs online all period, RADIUS reachable, no Meraki health alerts, firmware current, no rogue or spoofed networks, AI-RRM on, and no client stands out.')),
     att.length?el('ul',{},att.map(([sev,txt,lab,go])=>el('li',{},el('span',{class:'dot '+sev}),el('span',{class:'attn-t'},txt),el('button',{type:'button',class:'gbtn sm',onclick:go},lab+' →')))):null);
   app.append(el('section',{id:'overview'},el('div',{class:'sec-head'},el('h2',{},'Overview'),
       el('p',{class:'muted small'},P?(isCross(C,P)?`Each tile shows ${C.network} against ${P.network}. Green better, red worse, grey about the same. Click a tile for details and what to review.`:'Each tile shows this snapshot and its change from the baseline. Green improved, red got worse, grey no change. Click a tile for details and what to review.'):'The key numbers for this snapshot. Click a tile for details and what to review.')),
@@ -1613,7 +1645,7 @@ function render(){
     (()=>{const l=el('div',{class:'src-list'});for(const[,[ep,lb]]of Object.entries(SRC))l.append(el('code',{},ep),el('span',{},lb));return l})();
   app.append(el('details',{id:'sources'},el('summary',{},'Sources and method: every Meraki API endpoint used'),
     el('p',{class:'disclaimer-r'},el('b',{},'Read-only. '),'This tool only sends GET requests to the Meraki Dashboard API. It never sends POST, PUT, PATCH or DELETE requests, so it makes no changes to your Meraki environment. A read-only admin API key is all it needs.'),
-    el('p',{style:'margin-top:8px'},`Every figure comes from read-only Meraki Dashboard API v1 calls made when the snapshot was taken (${C.apiCalls} calls, ${C.apiErrors} refused). Snapshots are saved as files, so this report stays valid after Meraki deletes the underlying data.`),
+    el('p',{style:'margin-top:8px'},`Every figure comes from read-only Meraki Dashboard API v1 calls made when the snapshot was taken (${C.apiCalls} calls, ${C.apiErrors} refused${C.timing?`, collected in ${nf(C.timing.seconds,0)} s at up to ${C.timing.maxRps} requests a second`:''}). Snapshots are saved as files, so this report stays valid after Meraki deletes the underlying data.`),
     el('p',{style:'margin-top:6px'},'“No change” means the difference is within normal day-to-day variation for that metric. Targets are rules of thumb, not Meraki thresholds.'),
     list,EP.length?el('p',{style:'margin-top:6px'},'N = access points, B = bands per AP, C = wireless clients, D = days in the period. Wireless event types read: '+Object.keys(EVT).join(', ')+'.'):null,(C.notes||[]).length?el('p',{style:'margin-top:8px'},'Notes: '+C.notes.join(' ')):null,
     el('p',{style:'margin-top:8px'},`Snapshot taken ${fd(C.capturedAt)}. Report generated ${fd(DATA.generatedAt)}.`)));

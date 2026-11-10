@@ -20,13 +20,17 @@ import json
 import os
 import re
 import sys
+import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 import urllib.error
 import urllib.parse
 import urllib.request
 
 API = "https://api.meraki.com/api/v1"
-VERSION = "1.0"
+VERSION = "1.1"
+EVENT_SLICE_DAYS = 1         # the event log is paged in 1-day slices, fetched in parallel
+BUSY_CLIENT_EVENTS = 300     # clients with more log events than this get their connectivity events fetched in 2-day slices
 MAX_RADIO_DAYS = 14          # networkHealth/channelUtilization keeps 10-min data for 14 days
 BANDS = ["2.4", "5", "6"]
 EVENT_TYPES = {
@@ -47,8 +51,11 @@ DISCONNECT = ["disassociation", "wpa_deauth", "8021x_deauth"]
 # on a live network in Nov 2026; Meraki may change them.
 SOURCES = {
     "inventory": ("GET /organizations/{orgId}/devices", "Current state"),
-    "status": ("GET /devices/{serial}/wireless/status", "Current state at capture time"),
-    "radioSettings": ("GET /devices/{serial}/wireless/radio/settings", "Current state at capture time"),
+    "status": ("GET /organizations/{orgId}/wireless/ssids/statuses/byDevice", "Current state at capture time"),
+    "radioSettings": ("GET /organizations/{orgId}/wireless/rfProfiles/assignments/byDevice", "Current state at capture time"),
+    "firmware": ("GET /networks/{networkId}/firmwareUpgrades", "Current state at capture time"),
+    "availability": ("GET /organizations/{orgId}/devices/availabilities/changeHistory", "The snapshot period"),
+    "alerts": ("GET /organizations/{orgId}/assurance/alerts", "Open alerts at capture time"),
     "rfProfiles": ("GET /networks/{networkId}/wireless/rfProfiles", "Current state at capture time"),
     "rrm": ("GET /organizations/{orgId}/wireless/radio/rrm/byNetwork", "Current state at capture time"),
     "regulatory": ("GET /networks/{networkId}/wireless/settings (regulatoryDomain)", "Current state at capture time"),
@@ -84,12 +91,18 @@ ENDPOINTS = [
      "shows": "Access points tile, RF configuration", "lookback": "Current", "calls": "1"},
     {"area": "Access points", "path": "GET /organizations/{organizationId}/devices/statuses", "use": "Online, alerting or offline; last time each AP reported; LAN IP.",
      "shows": "Access points tile and list", "lookback": "Current", "calls": "1"},
+    {"area": "Access points", "path": "GET /organizations/{organizationId}/devices/availabilities/changeHistory", "use": "Every time an AP went offline, alerting or back online during the period.",
+     "shows": "Access points tile: uptime and outages", "lookback": "Period of the snapshot", "calls": "1+"},
+    {"area": "Access points", "path": "GET /organizations/{organizationId}/assurance/alerts", "use": "Meraki's own health alerts that are open now; the tool keeps those for wireless devices.",
+     "shows": "Things to look at, Access points tile", "lookback": "Open alerts at capture time", "calls": "1+"},
+    {"area": "Access points", "path": "GET /networks/{networkId}/firmwareUpgrades", "use": "The MR firmware running, newer releases available, and any scheduled or last upgrade.",
+     "shows": "Access points tile: firmware", "lookback": "Current", "calls": "1"},
     {"area": "Access points", "path": "GET /organizations/{organizationId}/wireless/clients/overview/byDevice", "use": "Clients connected to each AP right now.",
      "shows": "Access points tile and list", "lookback": "Current", "calls": "1"},
-    {"area": "RF configuration", "path": "GET /devices/{serial}/wireless/status", "use": "Each radio's band, channel, channel width, transmit power and the SSIDs it broadcasts.",
-     "shows": "RF configuration; also works out which radio is which band", "lookback": "Current", "calls": "N"},
-    {"area": "RF configuration", "path": "GET /devices/{serial}/wireless/radio/settings", "use": "Which RF profile each AP uses and any manual channel or power overrides.",
-     "shows": "RF configuration", "lookback": "Current", "calls": "N"},
+    {"area": "RF configuration", "path": "GET /organizations/{organizationId}/wireless/ssids/statuses/byDevice", "use": "Every AP's radios in one call: band, channel, channel width, transmit power, radio index and the SSIDs each broadcasts.",
+     "shows": "RF configuration, radio utilization (which radio is which band), regulatory domain", "lookback": "Current", "calls": "1 (falls back to 1 per AP)"},
+    {"area": "RF configuration", "path": "GET /organizations/{organizationId}/wireless/rfProfiles/assignments/byDevice", "use": "Which RF profile each AP uses, in one call.",
+     "shows": "RF configuration", "lookback": "Current", "calls": "1"},
     {"area": "RF configuration", "path": "GET /networks/{networkId}/wireless/rfProfiles", "use": "Band steering, minimum bitrates, channel widths and flex-radio settings.",
      "shows": "RF configuration", "lookback": "Current", "calls": "1"},
     {"area": "RF configuration", "path": "GET /networks/{networkId}/wireless/settings", "use": "The network's regulatory domain: country, domain name (for example FCC) and whether Meraki permits 6 GHz there. It follows the country set for the network.",
@@ -129,7 +142,7 @@ ENDPOINTS = [
     {"area": "Connection quality", "path": "GET /organizations/{organizationId}/wireless/devices/packetLoss/byClient", "use": "Packet loss per client.",
      "shows": "Packet loss detail panel", "lookback": "90 days", "calls": "1"},
     {"area": "Client events", "path": "GET /networks/{networkId}/events", "use": "Wireless event log (productType=wireless): disassociations, WPA and 802.1X deauthentications, 802.1X failures and RADIUS timeouts, 802.1X successes, fast roams.",
-     "shows": "Disconnects, 802.1X failures, RADIUS reachability, client issues", "lookback": "60+ days in practice", "calls": "1 per 1,000 events"},
+     "shows": "Disconnects, 802.1X failures, RADIUS reachability, client issues", "lookback": "60+ days in practice", "calls": "1 per 2-day slice, plus 1 per extra 1,000 events (slices fetched in parallel)"},
     {"area": "Roaming", "path": "GET /networks/{networkId}/wireless/clients/{clientId}/connectivityEvents", "use": "Each client's roam, connection and sticky events: the AP it left and joined, roam time, signal before and after.",
      "shows": "Roaming tile, scorecard rows and section", "lookback": "31 days", "calls": "C (up to 300 busiest clients)"},
 ]
@@ -166,13 +179,41 @@ class Meraki:
             url += "?" + urllib.parse.urlencode(_flatten(params), safe="[]")
         return self._get_url(url, path, allow_fail)[0]
 
-    MAX_RPS = 8   # stay under Meraki's 10 requests per second per organization
+    MAX_RPS = 8       # stay under Meraki's 10 requests per second per organization, leaving room for other tools
+    WORKERS = 8       # requests in flight at once; the rate limiter, not this, sets the pace
+
+    _lock = threading.Lock()
 
     def _throttle(self):
-        wait = getattr(self, "_last", 0) + 1.0 / self.MAX_RPS - time.monotonic()
-        if wait > 0:
-            time.sleep(wait)
-        self._last = time.monotonic()
+        """Hand out request slots 1/MAX_RPS apart across all threads, and hold everyone during a 429 back-off."""
+        with self._lock:
+            now = time.monotonic()
+            slot = max(now, getattr(self, "_next", 0.0), getattr(self, "_pause_until", 0.0))
+            self._next = slot + 1.0 / self.MAX_RPS
+        if slot > now:
+            time.sleep(slot - now)
+
+    def _back_off(self, seconds):
+        with self._lock:
+            self._pause_until = max(getattr(self, "_pause_until", 0.0), time.monotonic() + seconds)
+
+    def run(self, tasks):
+        """Run {name: callable} in parallel under the shared rate limit; return {name: result}.
+        A task that fails with SystemExit (a required call refused) stops the snapshot after the rest finish."""
+        out, err = {}, None
+        total, step = len(tasks), max(10, len(tasks) // 4)
+        with ThreadPoolExecutor(max_workers=self.WORKERS) as ex:
+            futs = {ex.submit(fn): k for k, fn in tasks.items()}
+            for n, (f, k) in enumerate(futs.items(), 1):
+                try:
+                    out[k] = f.result()
+                except SystemExit as e:
+                    err = err or e
+                if total >= 40 and n % step == 0 and n < total:
+                    log("   %d of %d requests done" % (n, total))
+        if err:
+            raise err
+        return out
 
     def _get_url(self, url, label, allow_fail=False):
         last = "too many retries (rate limited or server errors)"
@@ -184,15 +225,18 @@ class Meraki:
                 "Accept": "application/json",
                 "User-Agent": "wlan-snapshot/" + VERSION,
             })
+            t_start = time.monotonic()
             try:
                 with urllib.request.urlopen(req, timeout=60, context=SSL_CTX) as r:
                     body = r.read()
-                    self.calls.append({"path": label, "status": r.status})
+                    self.calls.append({"path": label, "status": r.status, "ms": round(1000 * (time.monotonic() - t_start))})
                     return (json.loads(body) if body else None), r.headers
             except urllib.error.HTTPError as e:
                 if e.code == 429 or e.code >= 500:
-                    wait = float(e.headers.get("Retry-After") or 2 ** attempt)
-                    time.sleep(min(wait, 30))
+                    wait = min(float(e.headers.get("Retry-After") or 2 ** attempt), 30)
+                    if e.code == 429:
+                        self._back_off(wait)   # every thread waits, not just this one
+                    time.sleep(wait)
                     continue
                 msg = e.read().decode("utf-8", "replace")[:300]
                 self.calls.append({"path": label, "status": e.code, "error": msg})
@@ -343,6 +387,7 @@ def snapshot(m, args):
     radio_t0 = max(t0, now - dt.timedelta(days=MAX_RADIO_DAYS) + dt.timedelta(minutes=15))
     radio_ok = radio_t0 < t1
     log("Snapshot of %s / %s, %s to %s" % (org["name"], net["name"], iso(t0), iso(t1)))
+    started = time.monotonic()
 
     snap = {
         "tool": "wlan-snapshot", "version": VERSION, "label": args.label,
@@ -355,48 +400,99 @@ def snapshot(m, args):
         snap["notes"].append("Backdated window: radio settings, RF profile and AutoRF are as of capture time, not the window.")
 
     log(" - access points")
-    aps = [d for d in m.get_all("/organizations/%s/devices" % oid, {"networkIds": [nid], "productTypes": ["wireless"], "perPage": 1000})]
+    aps = m.get_all("/organizations/%s/devices" % oid, {"networkIds": [nid], "productTypes": ["wireless"], "perPage": 1000})
+    if not aps:
+        raise SystemExit("No wireless devices in %s." % net["name"])
+    serials = [d["serial"] for d in aps]
+    res = 86400
+    win = {"t0": iso(t0), "t1": iso(t1)}
+    org_net = {"networkIds": [nid]}
+
+    # ---- one parallel batch: everything that needs only the network, org and time window
+    log(" - reading settings, radios, utilization, connections, clients and events (in parallel)")
+    G = lambda path, params=None: (lambda: m.get(path, params, allow_fail=True))
+    A = lambda path, params=None: (lambda: _get_all_or_none(m, path, params))
+    tasks = {
+        "bss": A("/organizations/%s/wireless/ssids/statuses/byDevice" % oid, dict(org_net, perPage=500)),
+        "rfAssign": A("/organizations/%s/wireless/rfProfiles/assignments/byDevice" % oid, dict(org_net, perPage=1000)),
+        "statuses": lambda: m.get_all("/organizations/%s/devices/statuses" % oid, {"networkIds": [nid], "productTypes": ["wireless"], "perPage": 1000}),
+        "clientsNow": G("/organizations/%s/wireless/clients/overview/byDevice" % oid, dict(org_net, perPage=1000)),
+        "ssids": G("/networks/%s/wireless/ssids" % nid),
+        "rfProfiles": G("/networks/%s/wireless/rfProfiles" % nid),
+        "rrm": G("/organizations/%s/wireless/radio/rrm/byNetwork" % oid, org_net),
+        "settings": G("/networks/%s/wireless/settings" % nid),
+        "overrides": A("/organizations/%s/wireless/radio/overrides/byDevice" % oid, {"perPage": 100}),
+        "firmware": G("/networks/%s/firmwareUpgrades" % nid),
+        "availability": A("/organizations/%s/devices/availabilities/changeHistory" % oid,
+                          {"networkIds": [nid], "productTypes": ["wireless"], "t0": iso(t0), "t1": iso(t1), "perPage": 1000}),
+        "alerts": A("/organizations/%s/assurance/alerts" % oid, {"networkId": nid, "perPage": 300}),
+        "clients": lambda: m.get_all("/networks/%s/clients" % nid, {"t0": iso(max(t0, now - dt.timedelta(days=31) + dt.timedelta(minutes=15))), "perPage": 1000}),
+        "lossByClient": G("/organizations/%s/wireless/devices/packetLoss/byClient" % oid, dict(org_net, perPage=1000, **win)),
+        "airMarshal": G("/networks/%s/wireless/airMarshal" % nid, {"t0": iso(max(t0, t1 - dt.timedelta(days=7)))}),
+        "amSettings": G("/organizations/%s/wireless/airMarshal/settings/byNetwork" % oid, org_net),
+        "amRules": G("/organizations/%s/wireless/airMarshal/rules" % oid, org_net),
+        "clientCount|all": G("/networks/%s/wireless/clientCountHistory" % nid, dict(win, resolution=res)),
+    }
+    for b in BANDS:
+        tasks["clientCount|" + b] = G("/networks/%s/wireless/clientCountHistory" % nid, dict(win, resolution=res, band=b))
+    for b in [None] + BANDS:
+        p = dict(org_net, perPage=1000, **win)
+        if b:
+            p["bands"] = [b]
+        tasks["lossByDevice|%s" % (b or "all")] = G("/organizations/%s/wireless/devices/packetLoss/byDevice" % oid, p)
+        for i, (c0, c1) in enumerate(chunks(t0, t1, 7)):
+            q = {"t0": iso(c0), "t1": iso(c1)}
+            if b:
+                q["band"] = b
+            tasks["conn|%s|%d" % (b or "all", i)] = G("/networks/%s/wireless/connectionStats" % nid, q)
+            tasks["lat|%s|%d" % (b or "all", i)] = G("/networks/%s/wireless/latencyStats" % nid, q)
+    for i, (c0, c1) in enumerate(chunks(t0, t1, 1)):
+        tasks["daily|%d|%s" % (i, iso(c0)[:10])] = G("/networks/%s/wireless/connectionStats" % nid, {"t0": iso(c0), "t1": iso(c1)})
+    for i, (c0, c1) in enumerate(chunks(t0, t1, 7)):
+        tasks["cconn|%d" % i] = G("/networks/%s/wireless/clients/connectionStats" % nid, {"t0": iso(c0), "t1": iso(c1)})
+        tasks["clat|%d" % i] = G("/networks/%s/wireless/clients/latencyStats" % nid, {"t0": iso(c0), "t1": iso(c1)})
+    if radio_ok:
+        for i, (c0, c1) in enumerate(chunks(radio_t0, t1, 7)):
+            tasks["util|%d" % i] = (lambda c0=c0, c1=c1: m.get_all("/networks/%s/networkHealth/channelUtilization" % nid,
+                                                                   {"t0": iso(c0), "t1": iso(c1), "resolution": 600, "perPage": 100}))
+    for i, (s0, s1) in enumerate(chunks(t0, t1, EVENT_SLICE_DAYS)):
+        tasks["events|%d" % i] = (lambda s0=s0, s1=s1: _event_slice(m, nid, s0, s1))
+    R = m.run(tasks)
+
+    # ---- access points and their radios (one org-wide call instead of one per AP)
+    bss = {x.get("serial"): x.get("basicServiceSets") or [] for x in (R["bss"] or [])}
+    rfa = {x.get("serial"): x.get("rfProfile") or {} for x in (R["rfAssign"] or [])}
+    missing = [d["serial"] for d in aps if d["serial"] not in bss]
+    per = {}
+    if missing:   # older orgs or a refused org-wide call: fall back to one call per AP
+        per = m.run({s: (lambda s=s: m.get("/devices/%s/wireless/status" % s, allow_fail=True)) for s in missing})
     snap["aps"] = []
     for d in aps:
-        st = m.get("/devices/%s/wireless/status" % d["serial"], allow_fail=True)
-        rs = m.get("/devices/%s/wireless/radio/settings" % d["serial"], allow_fail=True)
+        s = d["serial"]
+        radios = radio_map_org(bss[s]) if s in bss else radio_map(per.get(s))
         snap["aps"].append({
-            "serial": d["serial"], "name": d.get("name") or d["serial"], "model": d.get("model"),
-            "firmware": d.get("firmware"), "radios": radio_map(st), "address": d.get("address") or None,
-            "rfProfileId": (rs or {}).get("rfProfileId"),
-            "overrides": {k: v for k, v in (rs or {}).items() if k.endswith("Settings")},
+            "serial": s, "name": d.get("name") or s, "model": d.get("model"),
+            "firmware": d.get("firmware"), "radios": radios, "address": d.get("address") or None,
+            "rfProfileId": rfa.get(s, {}).get("id"), "rfProfile": rfa.get(s, {}).get("name"),
         })
-    serials = [a["serial"] for a in snap["aps"]]
-    if not serials:
-        raise SystemExit("No wireless devices in %s." % net["name"])
-
-    log(" - AP status and SSIDs")
-    st = m.get_all("/organizations/%s/devices/statuses" % oid, {"networkIds": [nid], "productTypes": ["wireless"], "perPage": 1000})
-    stmap = {x["serial"]: x for x in st}
-    cn = m.get("/organizations/%s/wireless/clients/overview/byDevice" % oid, {"networkIds": [nid], "perPage": 1000}, allow_fail=True) or {}
+    stmap = {x["serial"]: x for x in R["statuses"]}
+    cn = R["clientsNow"] or {}
     cnmap = {x["serial"]: (x.get("counts") or {}).get("byStatus", {}).get("online") for x in (cn.get("items", cn) if isinstance(cn, dict) else cn)}
     for a in snap["aps"]:
         x = stmap.get(a["serial"], {})
         a.update({"status": x.get("status"), "lastReportedAt": x.get("lastReportedAt"), "lanIp": x.get("lanIp"),
                   "clientsNow": cnmap.get(a["serial"])})
-    ss = m.get("/networks/%s/wireless/ssids" % nid, allow_fail=True) or []
     snap["ssids"] = [{"number": x["number"], "name": x["name"], "authMode": x.get("authMode"),
                       "radiusServers": ["%s:%s" % (r.get("host"), r.get("port")) for r in (x.get("radiusServers") or [])],
                       "radiusTesting": x.get("radiusTestingEnabled")}
-                     for x in ss if x.get("enabled")]
+                     for x in (R["ssids"] or []) if x.get("enabled")]
 
-    log(" - RF profiles and AutoRF")
-    profiles = m.get("/networks/%s/wireless/rfProfiles" % nid, allow_fail=True) or []
-    snap["rfProfiles"] = [_profile_summary(p) for p in profiles]
-    rrm = m.get("/organizations/%s/wireless/radio/rrm/byNetwork" % oid, {"networkIds": [nid]}, allow_fail=True)
-    snap["autoRf"] = ((rrm or {}).get("items") or [None])[0]
-    ws_ = m.get("/networks/%s/wireless/settings" % nid, allow_fail=True)
-    snap["regulatory"] = (ws_ or {}).get("regulatoryDomain") if ws_ is not None else None
-    try:   # radios with a fixed channel, power or width are outside AutoRF and AI-RRM
-        ov = m.get_all("/organizations/%s/wireless/radio/overrides/byDevice" % oid, {"perPage": 100})
-    except SystemExit:
-        ov = None
+    # ---- RF settings, regulatory domain, firmware, uptime, Meraki health alerts
+    snap["rfProfiles"] = [_profile_summary(p) for p in (R["rfProfiles"] or [])]
+    snap["autoRf"] = ((R["rrm"] or {}).get("items") or [None])[0]
+    snap["regulatory"] = (R["settings"] or {}).get("regulatoryDomain") if R["settings"] is not None else None
     names = {a["serial"]: a["name"] for a in snap["aps"]}
+    ov = R["overrides"]
     snap["radioOverrides"] = [] if ov is not None else None
     for x in ov or []:
         if x.get("serial") not in names:
@@ -405,57 +501,26 @@ def snapshot(m, args):
                  for r in x.get("radios") or [] if r.get("channel") is not None or r.get("targetPower") is not None or r.get("channelWidth") is not None]
         if fixed:
             snap["radioOverrides"].append({"serial": x["serial"], "ap": names[x["serial"]], "radios": fixed})
+    snap["firmware"] = _firmware(R["firmware"])
+    snap["availability"] = _availability(R["availability"], names, t0, t1)
+    snap["healthAlerts"] = _alerts(R["alerts"], names)
 
-    log(" - per-radio utilization (10-minute)")
+    # ---- utilization, client counts, connections, latency
     snap["radioUtil"] = {}
     if radio_ok:
-        rows = []
-        for c0, c1 in chunks(radio_t0, t1, 7):
-            rows.append(m.get_all("/networks/%s/networkHealth/channelUtilization" % nid,
-                                  {"t0": iso(c0), "t1": iso(c1), "resolution": 600, "perPage": 100}))
-        snap["radioUtil"] = _radio_util(rows, snap["aps"], net.get("timeZone"))
+        snap["radioUtil"] = _radio_util([R[k] for k in sorted(k for k in R if k.startswith("util|"))], snap["aps"], net.get("timeZone"))
     else:
         snap["notes"].append("Per-radio utilization skipped: the window ended more than 14 days ago.")
-
-    res = 86400
-    log(" - clients per band")
-    snap["clients"] = {"all": _series(m.get("/networks/%s/wireless/clientCountHistory" % nid,
-                                            {"t0": iso(t0), "t1": iso(t1), "resolution": res}, allow_fail=True), "clientCount")}
-    for b in BANDS:
-        snap["clients"][b] = _series(m.get("/networks/%s/wireless/clientCountHistory" % nid,
-                                           {"t0": iso(t0), "t1": iso(t1), "resolution": res, "band": b}, allow_fail=True), "clientCount")
-
-    log(" - signal, traffic and clients per AP per band")
-    snap["signal"], snap["usage"], snap["apClients"] = {}, {}, {}
-    for s in serials:
-        snap["signal"][s], snap["usage"][s], snap["apClients"][s] = {}, {}, {}
-        bands = sorted({r["band"] for a in snap["aps"] if a["serial"] == s for r in a["radios"]}) or BANDS
-        for b in bands:
-            sq = m.get("/networks/%s/wireless/signalQualityHistory" % nid,
-                       {"t0": iso(t0), "t1": iso(t1), "resolution": res, "deviceSerial": s, "band": b}, allow_fail=True)
-            snap["signal"][s][b] = {"snr": _series(sq, "snr"), "rssi": _series(sq, "rssi")}
-            us = m.get("/networks/%s/wireless/usageHistory" % nid,
-                       {"t0": iso(t0), "t1": iso(t1), "resolution": res, "deviceSerial": s, "band": b}, allow_fail=True)
-            snap["usage"][s][b] = _series(us, "totalKbps")
-            cc = m.get("/networks/%s/wireless/clientCountHistory" % nid,
-                       {"t0": iso(t0), "t1": iso(t1), "resolution": res, "deviceSerial": s, "band": b}, allow_fail=True)
-            snap["apClients"][s][b] = _series(cc, "clientCount")
-
-    log(" - connection results and latency per band")
+    snap["clients"] = {k.split("|")[1]: _series(v, "clientCount") for k, v in R.items() if k.startswith("clientCount|")}
     snap["connections"], snap["latency"] = {}, {}
-    for b in [None] + BANDS:
-        key = b or "all"
+    for b in ["all"] + BANDS:
         tot = {"assoc": 0, "auth": 0, "dhcp": 0, "dns": 0, "success": 0}
         dist, wavg = {}, {}
-        for c0, c1 in chunks(t0, t1, 7):
-            p = {"t0": iso(c0), "t1": iso(c1)}
-            if b:
-                p["band"] = b
-            cs = m.get("/networks/%s/wireless/connectionStats" % nid, p, allow_fail=True) or {}
-            for k in tot:
-                tot[k] += cs.get(k) or 0
-            ls = m.get("/networks/%s/wireless/latencyStats" % nid, p, allow_fail=True) or {}
-            for ac, v in ls.items():
+        for k in sorted(k for k in R if k.startswith("conn|%s|" % b)):
+            for f in tot:
+                tot[f] += (R[k] or {}).get(f) or 0
+        for k in sorted(k for k in R if k.startswith("lat|%s|" % b)):
+            for ac, v in (R[k] or {}).items():
                 d = dist.setdefault(ac, {})
                 raw = (v or {}).get("rawDistribution") or {}
                 for bucket, n in raw.items():
@@ -465,25 +530,18 @@ def snapshot(m, args):
                     n = sum(raw.values()) or 1
                     w[0] += v["avg"] * n
                     w[1] += n
-        snap["connections"][key] = tot
-        snap["latency"][key] = {}
+        snap["connections"][b] = tot
+        snap["latency"][b] = {}
         for ac, d in dist.items():
             lat = _latency(d)
             if ac in wavg and wavg[ac][1]:
                 lat["avg"] = round(wavg[ac][0] / wavg[ac][1], 2)   # Meraki's own average, weighted by samples
-            snap["latency"][key][ac] = lat
+            snap["latency"][b][ac] = lat
+    snap["connectionsDaily"] = [dict(R[k] or {}, day=k.split("|")[2]) for k in sorted((k for k in R if k.startswith("daily|")), key=lambda k: int(k.split("|")[1]))]
 
-    log(" - daily connection results")
-    snap["connectionsDaily"] = []
-    for c0, c1 in chunks(t0, t1, 1):
-        cs = m.get("/networks/%s/wireless/connectionStats" % nid, {"t0": iso(c0), "t1": iso(c1)}, allow_fail=True) or {}
-        snap["connectionsDaily"].append(dict(cs, day=iso(c0)[:10]))
-
-    log(" - per-client detail")
-    cl = m.get_all("/networks/%s/clients" % nid, {"t0": iso(max(t0, now - dt.timedelta(days=31) + dt.timedelta(minutes=15))),
-                                                  "perPage": 1000})
+    # ---- per-client detail
     info = {}
-    for x in cl:
+    for x in R["clients"]:
         if x.get("recentDeviceConnection") != "Wireless" or not x.get("mac"):
             continue
         u = x.get("usage") or {}
@@ -491,12 +549,13 @@ def snapshot(m, args):
                                   "os": x.get("os"), "ssid": x.get("ssid"), "ap": x.get("recentDeviceName"),
                                   "user": x.get("user"), "usageMb": rnd(((u.get("total") or 0) / 1024), 1)}
     conn, lat = {}, {}
-    for c0, c1 in chunks(t0, t1, 7):
-        for x in m.get("/networks/%s/wireless/clients/connectionStats" % nid, {"t0": iso(c0), "t1": iso(c1)}, allow_fail=True) or []:
+    for k in sorted(k for k in R if k.startswith("cconn|")):
+        for x in R[k] or []:
             d = conn.setdefault(x["mac"].lower(), {"assoc": 0, "auth": 0, "dhcp": 0, "dns": 0, "success": 0})
-            for k in d:
-                d[k] += (x.get("connectionStats") or {}).get(k) or 0
-        for x in m.get("/networks/%s/wireless/clients/latencyStats" % nid, {"t0": iso(c0), "t1": iso(c1)}, allow_fail=True) or []:
+            for f in d:
+                d[f] += (x.get("connectionStats") or {}).get(f) or 0
+    for k in sorted(k for k in R if k.startswith("clat|")):
+        for x in R[k] or []:
             d = lat.setdefault(x["mac"].lower(), {})
             for ac, v in (x.get("latencyStats") or {}).items():
                 a = d.setdefault(ac, {"dist": {}, "w": 0.0, "n": 0})
@@ -514,27 +573,60 @@ def snapshot(m, args):
             l["avg"] = round(a["w"] / a["n"], 2) if a["n"] else None
             o[ac] = {"avg": l["avg"], "over32Pct": l["over32Pct"], "samples": l["samples"]}
         lat_out[mac] = o
-    pl = m.get("/organizations/%s/wireless/devices/packetLoss/byClient" % oid,
-               {"networkIds": [nid], "t0": iso(t0), "t1": iso(t1), "perPage": 1000}, allow_fail=True) or []
+    pl = R["lossByClient"] or []
     loss = {}
     for x in (pl.get("items", pl) if isinstance(pl, dict) else pl):
         mac = ((x.get("client") or {}).get("mac") or "").lower()
         if mac:
             loss[mac] = {"up": x.get("upstream"), "down": x.get("downstream")}
     snap["clientDetail"] = {"info": info, "conn": conn, "latency": lat_out, "loss": loss}
+    snap["packetLoss"] = {}
+    for b in ["all"] + BANDS:
+        pl = R["lossByDevice|" + b] or []
+        snap["packetLoss"][b] = {i["device"]["serial"]: {"up": i.get("upstream"), "down": i.get("downstream")}
+                                 for i in (pl.get("items", pl) if isinstance(pl, dict) else pl)}
+    snap["events"] = _events([e for k in sorted((k for k in R if k.startswith("events|")), key=lambda k: int(k.split("|")[1])) for e in R[k][0]],
+                             sum(R[k][1] for k in R if k.startswith("events|")))
 
-    log(" - roaming (one call per client)")
+    # ---- second parallel batch: per AP and band, and per client (needs the radios and the client list above)
     ranked = sorted(info.items(), key=lambda kv: -(kv[1].get("usageMb") or 0))
     roam_clients = [(mac, i) for mac, i in ranked if i.get("id")][:MAX_ROAM_CLIENTS]
-    roams, sticky, conns, skipped = {}, {}, {}, max(0, len([1 for _, i in ranked if i.get("id")]) - MAX_ROAM_CLIENTS)
-    for n, (mac, i) in enumerate(roam_clients, 1):
-        if n % 25 == 0:
-            log("   %d of %d clients" % (n, len(roam_clients)))
-        try:
-            evs = m.get_all("/networks/%s/wireless/clients/%s/connectivityEvents" % (nid, i["id"]),
-                            {"t0": iso(t0), "t1": iso(t1), "perPage": 1000, "types": ["roam", "connection", "sticky"]})
-        except SystemExit:
+    skipped = max(0, len([1 for _, i in ranked if i.get("id")]) - MAX_ROAM_CLIENTS)
+    log(" - signal, traffic and clients per AP and band, and roaming for %d clients (in parallel)" % len(roam_clients))
+    tasks = {}
+    for a in snap["aps"]:
+        s = a["serial"]
+        for b in sorted({r["band"] for r in a["radios"]}) or BANDS:
+            q = dict(win, resolution=res, deviceSerial=s, band=b)
+            tasks["sq|%s|%s" % (s, b)] = G("/networks/%s/wireless/signalQualityHistory" % nid, q)
+            tasks["us|%s|%s" % (s, b)] = G("/networks/%s/wireless/usageHistory" % nid, q)
+            tasks["cc|%s|%s" % (s, b)] = G("/networks/%s/wireless/clientCountHistory" % nid, q)
+    busy = {c: sum(v.values()) for c, v in (snap["events"].get("byClient") or {}).items()}
+    for mac, i in roam_clients:
+        path = "/networks/%s/wireless/clients/%s/connectivityEvents" % (nid, i["id"])
+        # a very busy client has many pages, read one after another; slice its window so the pages run in parallel
+        spans = list(chunks(t0, t1, 2)) if busy.get(mac, 0) > BUSY_CLIENT_EVENTS else [(t0, t1)]
+        for j, (c0, c1) in enumerate(spans):
+            tasks["ev|%s|%d" % (mac, j)] = (lambda path=path, c0=c0, c1=c1: _get_all_or_none(
+                m, path, {"t0": iso(c0), "t1": iso(c1), "perPage": 1000, "types": ["roam", "connection", "sticky"]}))
+    R2 = m.run(tasks)
+    snap["signal"], snap["usage"], snap["apClients"] = {}, {}, {}
+    for k, v in R2.items():
+        kind, s, *rest = k.split("|")
+        if kind == "ev":
             continue
+        if kind == "sq":
+            snap["signal"].setdefault(s, {})[rest[0]] = {"snr": _series(v, "snr"), "rssi": _series(v, "rssi")}
+        elif kind == "us":
+            snap["usage"].setdefault(s, {})[rest[0]] = _series(v, "totalKbps")
+        elif kind == "cc":
+            snap["apClients"].setdefault(s, {})[rest[0]] = _series(v, "clientCount")
+    roams, sticky, conns = {}, {}, {}
+    for mac, i in roam_clients:
+        parts = [R2[k] for k in sorted((k for k in R2 if k.startswith("ev|%s|" % mac)), key=lambda k: int(k.rsplit("|", 1)[1]))]
+        if not parts or any(p is None for p in parts):
+            continue
+        evs = [e for p in parts for e in p]
         r, st = _roams(evs)
         cs = _connections(evs)
         if cs:
@@ -550,33 +642,21 @@ def snapshot(m, args):
     if skipped:
         snap["notes"].append("Roaming was checked for the %d busiest clients; %d others were skipped." % (len(roam_clients), skipped))
 
-    log(" - packet loss per AP per band")
-    snap["packetLoss"] = {}
-    for b in [None] + BANDS:
-        p = {"networkIds": [nid], "t0": iso(t0), "t1": iso(t1), "perPage": 1000}
-        if b:
-            p["bands"] = [b]
-        pl = m.get("/organizations/%s/wireless/devices/packetLoss/byDevice" % oid, p, allow_fail=True) or []
-        snap["packetLoss"][b or "all"] = {i["device"]["serial"]: {"up": i.get("upstream"), "down": i.get("downstream")}
-                                          for i in (pl.get("items", pl) if isinstance(pl, dict) else pl)}
-
-    log(" - client events (disassociation, deauth, 802.1X)")
-    snap["events"] = _events(m, nid, t0, t1, snap["aps"])
-
-    log(" - neighbouring networks (Air Marshal)")
+    # ---- Air Marshal
     am_t0 = max(t0, t1 - dt.timedelta(days=7))
-    am = m.get("/networks/%s/wireless/airMarshal" % nid, {"t0": iso(am_t0)}, allow_fail=True)
+    am = R["airMarshal"]
     snap["neighbors"] = _neighbors(am or [], serials, list(snap.get("radioUtil", {}).values()),
                                    {x.get("name") for x in snap.get("ssids") or [] if x.get("name")}, am_t0)
     snap["neighbors"]["available"] = am is not None
-    st = m.get("/organizations/%s/wireless/airMarshal/settings/byNetwork" % oid, {"networkIds": [nid]}, allow_fail=True)
+    st = R["amSettings"]
     st = next((i for i in (st or {}).get("items", []) if i.get("networkId") == nid), None) if isinstance(st, dict) else None
-    rules = m.get("/organizations/%s/wireless/airMarshal/rules" % oid, {"networkIds": [nid]}, allow_fail=True)
+    rules = R["amRules"]
     rules = [{"type": r.get("type"), "matchType": (r.get("match") or {}).get("type"), "match": (r.get("match") or {}).get("string")}
              for r in ((rules or {}).get("items", []) if isinstance(rules, dict) else [])
              if not r.get("network") or (r.get("network") or {}).get("id") == nid]
     snap["airMarshal"] = {"settings": st and {"defaultPolicy": st.get("defaultPolicy"), "scan": st.get("scan")},
                           "rules": rules if isinstance(rules, list) else None}
+    snap["timing"] = {"seconds": round(time.monotonic() - started, 1), "maxRps": m.MAX_RPS, "workers": m.WORKERS}
 
     snap["apiCalls"] = len(m.calls)
     snap["apiErrors"] = [c for c in m.calls if c.get("status", 200) >= 400]
@@ -648,7 +728,8 @@ def _radio_util(chunks_rows, aps, tz):
     for (serial, rk), d in by.items():
         idx = int(rk[4:])
         ap = names.get(serial, {})
-        radio = (ap.get("radios") or [])[idx] if idx < len(ap.get("radios") or []) else {}
+        rl = ap.get("radios") or []
+        radio = next((r for r in rl if r.get("index") == idx), None) or (rl[idx] if idx < len(rl) and "index" not in rl[idx] else {})
         ts = sorted(d)
         util = [d[t][0] for t in ts]
         nonw = [d[t][2] for t in ts]
@@ -679,14 +760,9 @@ def _radio_util(chunks_rows, aps, tz):
     return out
 
 
-def _events(m, nid, t0, t1, aps):
-    counts = {k: 0 for k in EVENT_TYPES}
-    by_band, by_ap, by_day = {}, {}, {}
-    radius = {}   # "ssid|ap" -> successes, timeouts, failures, last success
-    client_types = {}
-    clients = {}
-    cursor = iso(t1)
-    pages = 0
+def _event_slice(m, nid, s0, s1):
+    """Page the wireless event log backwards from s1 to s0. Returns (events in [s0, s1), pages read)."""
+    out, cursor, pages = [], iso(s1), 0
     while True:
         data = m.get("/networks/%s/events" % nid, {"productType": "wireless", "perPage": 1000,
                                                     "includedEventTypes": list(EVENT_TYPES), "endingBefore": cursor})
@@ -695,50 +771,148 @@ def _events(m, nid, t0, t1, aps):
         stop = False
         for e in evs:
             t = parse_ts(e["occurredAt"])
-            if t < t0:
+            if t < s0:
                 stop = True
-                continue
-            if t >= t1:
-                continue
-            ty = e["type"]
-            counts[ty] = counts.get(ty, 0) + 1
-            if ty.startswith("8021x_"):
-                r = radius.setdefault("%s|%s" % (e.get("ssidNumber"), e.get("deviceName") or e.get("deviceSerial")),
-                                      {"ssid": e.get("ssidNumber"), "ap": e.get("deviceName") or e.get("deviceSerial"),
-                                       "success": 0, "timeout": 0, "failure": 0, "lastSuccess": None, "lastTimeout": None})
-                if ty == "8021x_eap_success":
-                    r["success"] += 1
-                    r["lastSuccess"] = max(r["lastSuccess"] or "", e["occurredAt"])
-                elif ty == "8021x_radius_timeout":
-                    r["timeout"] += 1
-                    r["lastTimeout"] = max(r["lastTimeout"] or "", e["occurredAt"])
-                elif ty in ("8021x_eap_failure", "8021x_client_timeout"):
-                    r["failure"] += 1
-            if ty == "8021x_eap_success":
-                continue
-            band = str((e.get("eventData") or {}).get("band") or "unknown")
-            band = {"2": "2.4", "24": "2.4"}.get(band, band)
-            by_band.setdefault(band, {}).setdefault(ty, 0)
-            by_band[band][ty] += 1
-            ap = e.get("deviceName") or e.get("deviceSerial") or "unknown"
-            by_ap.setdefault(ap, {}).setdefault(ty, 0)
-            by_ap[ap][ty] += 1
-            day = e["occurredAt"][:10]
-            by_day.setdefault(day, {}).setdefault(ty, 0)
-            by_day[day][ty] += 1
-            if ty in DOT1X_FAIL or ty in DISCONNECT:
-                c = (e.get("clientMac") or e.get("clientId") or "").lower()
-                clients[c] = clients.get(c, 0) + 1
-                ct = client_types.setdefault(c, {})
-                ct[ty] = ct.get(ty, 0) + 1
+            elif t < s1:
+                out.append(e)
         start = (data or {}).get("pageStartAt")
-        if stop or not evs or not start or parse_ts(start) <= t0 or start == cursor or pages > 500:
+        if stop or not evs or not start or parse_ts(start) <= s0 or start == cursor or pages > 500:
             break
         cursor = start
+    return out, pages
+
+
+def _events(evs, pages):
+    counts = {k: 0 for k in EVENT_TYPES}
+    by_band, by_ap, by_day = {}, {}, {}
+    radius = {}   # "ssid|ap" -> successes, timeouts, failures, last success
+    client_types = {}
+    clients = {}
+    for e in evs:
+        ty = e["type"]
+        counts[ty] = counts.get(ty, 0) + 1
+        if ty.startswith("8021x_"):
+            r = radius.setdefault("%s|%s" % (e.get("ssidNumber"), e.get("deviceName") or e.get("deviceSerial")),
+                                  {"ssid": e.get("ssidNumber"), "ap": e.get("deviceName") or e.get("deviceSerial"),
+                                   "success": 0, "timeout": 0, "failure": 0, "lastSuccess": None, "lastTimeout": None})
+            if ty == "8021x_eap_success":
+                r["success"] += 1
+                r["lastSuccess"] = max(r["lastSuccess"] or "", e["occurredAt"])
+            elif ty == "8021x_radius_timeout":
+                r["timeout"] += 1
+                r["lastTimeout"] = max(r["lastTimeout"] or "", e["occurredAt"])
+            elif ty in ("8021x_eap_failure", "8021x_client_timeout"):
+                r["failure"] += 1
+        if ty == "8021x_eap_success":
+            continue
+        band = str((e.get("eventData") or {}).get("band") or "unknown")
+        band = {"2": "2.4", "24": "2.4"}.get(band, band)
+        by_band.setdefault(band, {}).setdefault(ty, 0)
+        by_band[band][ty] += 1
+        ap = e.get("deviceName") or e.get("deviceSerial") or "unknown"
+        by_ap.setdefault(ap, {}).setdefault(ty, 0)
+        by_ap[ap][ty] += 1
+        day = e["occurredAt"][:10]
+        by_day.setdefault(day, {}).setdefault(ty, 0)
+        by_day[day][ty] += 1
+        if ty in DOT1X_FAIL or ty in DISCONNECT:
+            c = (e.get("clientMac") or e.get("clientId") or "").lower()
+            clients[c] = clients.get(c, 0) + 1
+            ct = client_types.setdefault(c, {})
+            ct[ty] = ct.get(ty, 0) + 1
     top = sorted(clients.items(), key=lambda x: -x[1])[:10]
     by_client = {c: client_types.get(c, {}) for c, _ in sorted(clients.items(), key=lambda x: -x[1])[:300]}
     return {"counts": counts, "byBand": by_band, "byAp": by_ap, "byDay": by_day, "radius": list(radius.values()), "byClient": by_client,
             "topClients": [{"client": c, "events": n} for c, n in top], "pages": pages}
+
+
+def _get_all_or_none(m, path, params=None):
+    try:
+        return m.get_all(path, params)
+    except SystemExit:
+        return None
+
+
+def radio_map_org(bsss):
+    """Radios from the org-wide SSID status call, which names each BSS's radio index (wifi0, 1, 2) directly."""
+    by = {}
+    for b in bsss:
+        r = b.get("radio") or {}
+        if r.get("channel") is None:
+            continue
+        idx = int(r.get("index") or 0)
+        x = by.setdefault(idx, {"band": str(r.get("band") or ""), "channel": r.get("channel"),
+                                "width": "%s MHz" % r["channelWidth"] if r.get("channelWidth") is not None else None,
+                                "power": "%s dBm" % r["power"] if r.get("power") is not None else None, "ssids": [], "index": idx})
+        s = b.get("ssid") or {}
+        if s.get("enabled") and r.get("isBroadcasting") and s.get("name") not in x["ssids"]:
+            x["ssids"].append(s.get("name"))
+    return [by[i] for i in sorted(by)]
+
+
+def _firmware(fw):
+    w = ((fw or {}).get("products") or {}).get("wireless") if isinstance(fw, dict) else None
+    if not w:
+        return None
+    v = lambda x: {"name": (x or {}).get("shortName"), "type": (x or {}).get("releaseType"), "date": (x or {}).get("releaseDate")} if (x or {}).get("shortName") else None
+    cur = w.get("currentVersion") or {}
+    avail = w.get("availableVersions") or []
+    stable = sorted((a for a in avail if a.get("releaseType") == "stable"), key=lambda a: a.get("releaseDate") or "")
+    nxt = w.get("nextUpgrade") or {}
+    last = w.get("lastUpgrade") or {}
+    return {"current": v(cur), "latestStable": v(stable[-1]) if stable else None,
+            "newer": [v(a) for a in avail if (a.get("releaseDate") or "") > (cur.get("releaseDate") or "") and a.get("id") != cur.get("id")],
+            "nextUpgrade": {"time": nxt.get("time") or None, "to": v(nxt.get("toVersion"))} if nxt.get("time") else None,
+            "lastUpgrade": {"time": last.get("time"), "from": v(last.get("fromVersion")), "to": v(last.get("toVersion"))} if last.get("time") else None}
+
+
+def _availability(rows, names, t0, t1):
+    """Per AP: status changes in the window (offline, alerting, back online) and time spent not online."""
+    if rows is None:
+        return None
+    by = {}
+    for r in rows:
+        s = ((r.get("device") or {}).get("serial"))
+        if s not in names:
+            continue
+        stat = lambda side: next((x.get("value") for x in ((r.get("details") or {}).get(side) or []) if x.get("name") == "status"), None)
+        by.setdefault(s, []).append({"ts": r.get("ts"), "from": stat("old"), "to": stat("new")})
+    out = {}
+    span = (t1 - t0).total_seconds()
+    for s, ch in by.items():
+        ch.sort(key=lambda x: x["ts"] or "")
+        down, since = 0.0, None
+        if ch and ch[0]["from"] and ch[0]["from"] != "online":
+            since = t0
+        for c in ch:
+            ts = parse_ts(c["ts"])
+            if c["to"] != "online" and since is None:
+                since = ts
+            elif c["to"] == "online" and since is not None:
+                down += (ts - since).total_seconds()
+                since = None
+        if since is not None:
+            down += (t1 - since).total_seconds()
+        out[s] = {"ap": names[s], "changes": ch[-20:], "offline": sum(1 for c in ch if c["to"] == "offline"),
+                  "notOnlineMin": round(down / 60), "uptimePct": round(100 * (1 - down / span), 2) if span else None}
+    return {"byAp": out, "aps": len(names)}
+
+
+def _alerts(rows, names):
+    """Meraki's own health alerts that are open now, for wireless devices in this network."""
+    if rows is None:
+        return None
+    out = []
+    for a in rows:
+        devs = ((a.get("scope") or {}).get("devices") or [])
+        wireless = (a.get("deviceType") in ("MR", "CW") or a.get("scopeCategory") in ("MR", "CW", "wireless")
+                    or any((d.get("productType") == "wireless") for d in devs))
+        if not wireless or a.get("dismissedAt") or a.get("resolvedAt"):
+            continue
+        out.append({"title": a.get("title"), "type": a.get("type"), "severity": a.get("severity"), "category": a.get("categoryType"),
+                    "startedAt": a.get("startedAt"), "description": re.sub(r"<[^>]+>", "", a.get("description") or "").strip()[:300],
+                    "devices": [d.get("name") or d.get("serial") for d in devs][:10]})
+    return out
 
 
 _CH5 = set(range(36, 65, 4)) | set(range(100, 145, 4)) | set(range(149, 178, 4))
@@ -954,7 +1128,8 @@ def summarize(s):
     days = s["window"]["days"]
     out = {"label": s["label"], "window": s["window"], "capturedAt": s["capturedAt"], "network": s["network"]["name"],
            "networkId": s["network"]["id"], "org": s["org"]["name"],
-           "notes": s.get("notes", []), "aps": s["aps"], "rfProfiles": s.get("rfProfiles"), "autoRf": s.get("autoRf"), "regulatory": s.get("regulatory"), "regulatoryRead": "regulatory" in s,
+           "notes": s.get("notes", []), "aps": s["aps"], "rfProfiles": s.get("rfProfiles"), "autoRf": s.get("autoRf"), "regulatory": s.get("regulatory"), "firmware": s.get("firmware"), "availability": s.get("availability"),
+           "healthAlerts": s.get("healthAlerts"), "timing": s.get("timing"), "regulatoryRead": "regulatory" in s,
            "neighbors": s.get("neighbors"), "airMarshal": s.get("airMarshal"), "apiCalls": s.get("apiCalls"), "apiErrors": len(s.get("apiErrors", [])),
            "ssids": s.get("ssids", []), "radioOverrides": s.get("radioOverrides")}
     # clients

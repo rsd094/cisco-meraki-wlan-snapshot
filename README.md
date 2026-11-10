@@ -50,10 +50,11 @@ Each snapshot saves two files in the `snapshots` folder:
 **How a report reads.** Most important first, detail one click away:
 
 1. **Things to look at**: the facts that need someone's attention, most serious first: Meraki health alerts, APs not online or with outages in the period, firmware behind or mixed, RADIUS timeouts, rogue or spoofed networks, AI-RRM off or radios fixed manually, clients to check, ping-pong and sticky clients, and, in a comparison, metrics that got worse. Healthy items are left out. Each has a button to its detail.
-2. **Overview tiles**: infrastructure (APs, RADIUS, AI-RRM, regulatory domain, Air Marshal), then the key client-experience numbers. Click a tile for its review guide.
-3. **Scorecard**: every metric with its daily trend. Click a row for the clients, radios or networks behind it.
-4. Then a client's experience in order: **Problematic clients** (who has problems and what to do, then where joins fail and which APs log the events), **Roaming**, **Where clients connect** and **By band**.
-5. Then the RF underneath: **Radio utilization** and **RF configuration**, and finally **Sources and method**.
+2. **Key metrics**: six measures of client experience, each the share of joins, client time, radio time or roams in a healthy range (see below). Click one for what's behind it.
+3. **Overview tiles**: infrastructure (APs, RADIUS, AI-RRM, regulatory domain, Air Marshal), then the key client-experience numbers. Click a tile for its review guide.
+4. **Scorecard**: every metric with its daily trend. Click a row for the clients, radios or networks behind it.
+5. Then a client's experience in order: **Problematic clients** (who has problems and what to do, then where joins fail and which APs log the events), **Roaming**, **Where clients connect** and **By band**.
+6. Then the RF underneath: **Radio utilization** and **RF configuration**, and finally **Sources and method**.
 
 A bar of section links stays at the top of the page as you scroll, with the section you're reading highlighted.
 
@@ -149,6 +150,21 @@ Wireless event types read from the event log: `disassociation`, `wpa_deauth`, `8
 | Traffic per day | Each AP and band's average daily throughput, converted to GB per day and summed | `wireless/usageHistory` |
 
 **RADIUS reachability is worked out, not measured.** Meraki's API has no read-only RADIUS health check, so the report counts, per AP and per 802.1X SSID, successful 802.1X logins (proof that AP reached the server) and RADIUS timeouts (it didn't). An AP with no 802.1X logins in the period shows grey: unknown, not down.
+
+### Key metrics
+
+Each key metric is a percentage: how much of the period, the joins or the roams fell in a healthy range. One snapshot shows the values only; a comparison colours the change green, red or grey. The healthy ranges are common rules of thumb, not Meraki thresholds, and are set at the top of `report_template.html` (`SL_SNR`, `SL_BUSY`, `SL_LAT`).
+
+| Metric | Measured as | From |
+|---|---|---|
+| Successful connects | Joins that completed association, authentication, DHCP and DNS, out of all join attempts | `wireless/connectionStats` |
+| Coverage | Client-days on an AP and band whose average client SNR is 25 dB or better, weighted by each AP and band's clients a day | `wireless/signalQualityHistory`, `wireless/clientCountHistory` |
+| Capacity | Radio-hours with the channel under 50% busy, across every radio | `networkHealth/channelUtilization` |
+| Roaming | Good roams (under 1 s, no signal drop, no gap) out of all roams | `clients/{clientId}/connectivityEvents` |
+| Responsiveness | Normal (best-effort) packets that crossed the air in under 32 ms | `wireless/latencyStats` |
+| AP availability | Time each AP was online during the period, averaged across APs | `devices/availabilities/changeHistory` |
+
+These are built from Meraki's per-AP, per-radio and network averages, so they follow the same idea as other vendors' experience metrics but aren't directly comparable with tools that measure each client minute by minute.
 
 ### How roams are classed
 

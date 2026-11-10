@@ -51,6 +51,7 @@ SOURCES = {
     "radioSettings": ("GET /devices/{serial}/wireless/radio/settings", "Current state at capture time"),
     "rfProfiles": ("GET /networks/{networkId}/wireless/rfProfiles", "Current state at capture time"),
     "rrm": ("GET /organizations/{orgId}/wireless/radio/rrm/byNetwork", "Current state at capture time"),
+    "regulatory": ("GET /networks/{networkId}/wireless/settings (regulatoryDomain)", "Current state at capture time"),
     "radioUtil": ("GET /networks/{networkId}/networkHealth/channelUtilization", "14 days (10-minute detail, per radio)"),
     "signal": ("GET /networks/{networkId}/wireless/signalQualityHistory", "31 days"),
     "clients": ("GET /networks/{networkId}/wireless/clientCountHistory", "31 days"),
@@ -91,6 +92,8 @@ ENDPOINTS = [
      "shows": "RF configuration", "lookback": "Current", "calls": "N"},
     {"area": "RF configuration", "path": "GET /networks/{networkId}/wireless/rfProfiles", "use": "Band steering, minimum bitrates, channel widths and flex-radio settings.",
      "shows": "RF configuration", "lookback": "Current", "calls": "1"},
+    {"area": "RF configuration", "path": "GET /networks/{networkId}/wireless/settings", "use": "The network's regulatory domain: country, domain name (for example FCC) and whether Meraki permits 6 GHz there. It follows the country set for the network.",
+     "shows": "Regulatory domain tile", "lookback": "Current", "calls": "1"},
     {"area": "RF configuration", "path": "GET /organizations/{organizationId}/wireless/radio/rrm/byNetwork", "use": "AutoRF settings: whether AI-RRM is on and when it was enabled, FRA, busy-hour behaviour, channel avoidance.",
      "shows": "AI-RRM tile, RF configuration", "lookback": "Current", "calls": "1"},
     {"area": "RF configuration", "path": "GET /organizations/{organizationId}/wireless/radio/overrides/byDevice", "use": "Radios with a manually fixed channel, power or channel width. These are outside AI-RRM's control even when it's on.",
@@ -359,7 +362,7 @@ def snapshot(m, args):
         rs = m.get("/devices/%s/wireless/radio/settings" % d["serial"], allow_fail=True)
         snap["aps"].append({
             "serial": d["serial"], "name": d.get("name") or d["serial"], "model": d.get("model"),
-            "firmware": d.get("firmware"), "radios": radio_map(st),
+            "firmware": d.get("firmware"), "radios": radio_map(st), "address": d.get("address") or None,
             "rfProfileId": (rs or {}).get("rfProfileId"),
             "overrides": {k: v for k, v in (rs or {}).items() if k.endswith("Settings")},
         })
@@ -387,6 +390,8 @@ def snapshot(m, args):
     snap["rfProfiles"] = [_profile_summary(p) for p in profiles]
     rrm = m.get("/organizations/%s/wireless/radio/rrm/byNetwork" % oid, {"networkIds": [nid]}, allow_fail=True)
     snap["autoRf"] = ((rrm or {}).get("items") or [None])[0]
+    ws_ = m.get("/networks/%s/wireless/settings" % nid, allow_fail=True)
+    snap["regulatory"] = (ws_ or {}).get("regulatoryDomain") if ws_ is not None else None
     try:   # radios with a fixed channel, power or width are outside AutoRF and AI-RRM
         ov = m.get_all("/organizations/%s/wireless/radio/overrides/byDevice" % oid, {"perPage": 100})
     except SystemExit:
@@ -949,7 +954,7 @@ def summarize(s):
     days = s["window"]["days"]
     out = {"label": s["label"], "window": s["window"], "capturedAt": s["capturedAt"], "network": s["network"]["name"],
            "networkId": s["network"]["id"], "org": s["org"]["name"],
-           "notes": s.get("notes", []), "aps": s["aps"], "rfProfiles": s.get("rfProfiles"), "autoRf": s.get("autoRf"),
+           "notes": s.get("notes", []), "aps": s["aps"], "rfProfiles": s.get("rfProfiles"), "autoRf": s.get("autoRf"), "regulatory": s.get("regulatory"), "regulatoryRead": "regulatory" in s,
            "neighbors": s.get("neighbors"), "airMarshal": s.get("airMarshal"), "apiCalls": s.get("apiCalls"), "apiErrors": len(s.get("apiErrors", [])),
            "ssids": s.get("ssids", []), "radioOverrides": s.get("radioOverrides")}
     # clients

@@ -50,12 +50,12 @@ Each snapshot saves two files in the `snapshots` folder:
 **How a report reads.** Most important first, detail one click away:
 
 1. **Things to look at**: the facts that need someone's attention, most serious first: APs not online, RADIUS timeouts, rogue or spoofed networks, AI-RRM off or radios fixed manually, clients to check, ping-pong and sticky clients, and, in a comparison, metrics that got worse. Healthy items are left out. Each has a button to its detail.
-2. **Overview tiles**: infrastructure (APs, RADIUS, AI-RRM, Air Marshal), then the key client-experience numbers. Click a tile for its review guide.
+2. **Overview tiles**: infrastructure (APs, RADIUS, AI-RRM, regulatory domain, Air Marshal), then the key client-experience numbers. Click a tile for its review guide.
 3. **Scorecard**: every metric with its daily trend. Click a row for the clients, radios or networks behind it.
 4. Then a client's experience in order: **Problematic clients** (who has problems and what to do, then where joins fail and which APs log the events), **Roaming**, **Where clients connect** and **By band**.
-5. Then the RF underneath: **Radio utilization**, **RF spectrum** and **RF configuration**, and finally **Sources and method**.
+5. Then the RF underneath: **Radio utilization** and **RF configuration**, and finally **Sources and method**.
 
-A bar of section links stays at the top of the page as you scroll.
+A bar of section links stays at the top of the page as you scroll, with the section you're reading highlighted.
 
 **The period** is how much history a snapshot captures, counting back from when you click Generate report. The default and maximum is 14 days, because Meraki keeps per-radio detail for only 14 days. Use the same period every time so snapshots compare fairly. AP status and radio settings are read at the moment of capture.
 
@@ -85,6 +85,7 @@ Every figure in a report comes from these calls. The same list is shown in the a
 | RF configuration | `GET /devices/{serial}/wireless/status` | Each radio's band, channel, channel width, transmit power and the SSIDs it broadcasts. | RF configuration; also works out which radio is which band | Current | N |
 | RF configuration | `GET /devices/{serial}/wireless/radio/settings` | Which RF profile each AP uses and any manual channel or power overrides. | RF configuration | Current | N |
 | RF configuration | `GET /networks/{networkId}/wireless/rfProfiles` | Band steering, minimum bitrates, channel widths and flex-radio settings. | RF configuration | Current | 1 |
+| RF configuration | `GET /networks/{networkId}/wireless/settings` | The network's regulatory domain: country, domain name (for example FCC) and whether Meraki permits 6 GHz there. It follows the country set for the network. | Regulatory domain tile | Current | 1 |
 | RF configuration | `GET /organizations/{organizationId}/wireless/radio/rrm/byNetwork` | AutoRF settings: whether AI-RRM is on and when it was enabled, FRA, busy-hour behaviour, channel avoidance. | AI-RRM tile, RF configuration | Current | 1 |
 | RF configuration | `GET /organizations/{organizationId}/wireless/radio/overrides/byDevice` | Radios with a manually fixed channel, power or channel width. These are outside AI-RRM's control even when it's on. | AI-RRM tile | Current | 1+ (pages of 100) |
 | RF configuration | `GET /networks/{networkId}/wireless/airMarshal` | Other networks your APs hear, with signal strength. | Air Marshal tile, RF spectrum, Strong neighbouring networks | 31 days (last 7 days used) | 1 |
@@ -115,6 +116,7 @@ Wireless event types read from the event log: `disassociation`, `wpa_deauth`, `8
 |---|---|---|
 | Access points online | APs whose status is `online`, out of all APs in the network | `devices/statuses` |
 | AI-RRM | On or off for the network, from `ai.enabled`, with the date it was enabled. Radios with a fixed channel, power or width are listed, because AutoRF and AI-RRM can't manage them | `wireless/radio/rrm/byNetwork`, `wireless/radio/overrides/byDevice` |
+| Regulatory domain | The network's country, regulatory domain (for example FCC) and whether Meraki permits 6 GHz there, from `regulatoryDomain`. Flagged when no country is set (Meraki's default domain), when 6 GHz radios are on although 6 GHz isn't permitted, or when 6 GHz is permitted but unused. Click the tile to compare each AP's address in Dashboard with the country | `wireless/settings`, `devices/statuses` |
 | RADIUS servers reachable | A server counts as reachable when at least one AP logged a successful 802.1X login through it; APs with RADIUS timeouts are listed as warnings | `wireless/ssids`, `events` |
 | Connection success | Successful joins ÷ (successful + failed at association, authentication, DHCP or DNS) | `wireless/connectionStats` |
 | Auth failure rate | Joins failed at authentication ÷ all join attempts | `wireless/connectionStats` |
@@ -124,7 +126,7 @@ Wireless event types read from the event log: `disassociation`, `wpa_deauth`, `8
 | Slow voice packets | Voice samples in Meraki's 32 ms-or-slower buckets ÷ all voice samples | `wireless/latencyStats` |
 | Upstream packet loss | Packets lost ÷ packets sent, client to AP, all APs | `wireless/devices/packetLoss/byDevice` |
 | Busiest 2.4 / 5 / 6 GHz radio | The highest 95th percentile of 10-minute utilization among that band's radios | `networkHealth/channelUtilization` |
-| 802.11 vs non-Wi-Fi (RF spectrum) | Meraki splits every 10-minute utilization sample into `wifi` (802.11 frames from any network on the channel: your clients and APs, beacons, retries and neighbours) and `non_wifi` (energy that isn't Wi-Fi: microwaves, Bluetooth, cordless phones, video senders, radar). Average and 95th percentile of each, per radio and per day. The channel map draws each radio across its full channel width; radios whose channels overlap share the block side by side. Neighbouring networks per channel come from Air Marshal and are drawn 20 MHz wide on their primary channel. It's a channel map from 10-minute averages, not a live spectrum analyser: Meraki's live FFT and waterfall (Dashboard: Wireless › RF spectrum) aren't in the API | `networkHealth/channelUtilization`, `wireless/airMarshal` |
+| 802.11 vs non-Wi-Fi (RF spectrum, not shown yet) | Collected in every snapshot; the RF spectrum section is switched off for now (`SHOW_SPECTRUM` in `report_template.html`). Meraki splits every 10-minute utilization sample into `wifi` (802.11 frames from any network on the channel: your clients and APs, beacons, retries and neighbours) and `non_wifi` (energy that isn't Wi-Fi: microwaves, Bluetooth, cordless phones, video senders, radar). Average and 95th percentile of each, per radio and per day. The channel map draws each radio across its full channel width; radios whose channels overlap share the block side by side. Neighbouring networks per channel come from Air Marshal and are drawn 20 MHz wide on their primary channel. It's a channel map from 10-minute averages, not a live spectrum analyser: Meraki's live FFT and waterfall (Dashboard: Wireless › RF spectrum) aren't in the API | `networkHealth/channelUtilization`, `wireless/airMarshal` |
 | Band buttons (Where clients connect) | Each band's share of connection attempts (successes + failures) from `wireless/connectionStats` per band. A client that tries more than one band counts on each, so bands add up to more than the all-band total. With one SSID picked, the share of that SSID's successful connections instead | `wireless/connectionStats`, `clients/{clientId}/connectivityEvents` |
 | Clients a day per radio | Unique clients per day on that AP and band, averaged over the period. Meraki counts per AP and band, so an AP with two 5 GHz radios shows one figure for both. Click a radio for the clients that connected to it (matched by AP, band and channel from connection events) and its client signal, traffic, busiest hour and neighbours on its channel | `wireless/clientCountHistory`, `clients/{clientId}/connectivityEvents` |
 | Non-Wi-Fi interference | The highest 95th percentile of non-Wi-Fi utilization on any radio | `networkHealth/channelUtilization` |

@@ -274,8 +274,8 @@ tr.rrow:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
 .ambars{display:grid;gap:4px;max-width:640px}.ambar{display:grid;grid-template-columns:90px 1fr 140px;align-items:center;gap:8px;font-size:13px}
 .ambar .t{height:10px;background:var(--line);border-radius:5px;overflow:hidden}.ambar .f{display:block;height:100%;background:var(--accent)}
 .ambar .n{color:var(--muted);font-variant-numeric:tabular-nums}
-.secnav{position:sticky;top:0;z-index:20;display:flex;flex-wrap:wrap;gap:4px 16px;padding:8px 14px;font-size:13px;background:var(--bg);border-bottom:1px solid var(--line);margin:-6px 0}
-.secnav a{color:var(--muted);text-decoration:none}.secnav a:hover{color:var(--fg);text-decoration:underline}
+.secnav{position:sticky;top:0;z-index:20;display:flex;flex-wrap:wrap;gap:6px 8px;padding:10px 0;font-size:13px;background:var(--bg);border-bottom:1px solid var(--line);margin:-6px 0}
+.secnav a{color:var(--fg);font-weight:600;text-decoration:none;background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:6px 14px;line-height:1.2;transition:border-color .15s,background .15s}.secnav a:hover{border-color:var(--accent);color:var(--accent)}.secnav a:focus-visible{outline:2px solid var(--accent);outline-offset:2px}.secnav a.cur{background:var(--accent);border-color:var(--accent);color:#fff}
 section,details{scroll-margin-top:52px}
 .attn{border:1px solid var(--line);border-left:4px solid var(--warn,#c98a14);border-radius:10px;background:var(--panel);padding:12px 14px}
 .attn.clear{border-left-color:var(--good,#2f8f5b)}
@@ -323,6 +323,7 @@ const DATA=/*__DATA__*/null;
 const PAGE_SOURCE='<!doctype html>\n'+document.documentElement.outerHTML;
 (function(){
 const SRC=DATA.sources, EVT=DATA.eventTypes;
+const SHOW_SPECTRUM=false;   /* RF spectrum section is parked for now; flip to true to show it */
 let SNAPS=DATA.snapshots.slice();
 let cur=SNAPS.length-1, base=SNAPS.length>1?SNAPS.length-2:null, loadErr='';
 if(DATA.view){if(DATA.view.cur!=null&&SNAPS[DATA.view.cur])cur=DATA.view.cur;base=DATA.view.base!=null&&SNAPS[DATA.view.base]?DATA.view.base:null}
@@ -338,6 +339,7 @@ const win=S=>fds(S.window.t0)+' – '+fd(S.window.t1);
 const css=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
 const days=S=>S.window.days;
 const band=b=>b+' GHz';
+const regionName=c=>{try{return c?new Intl.DisplayNames(['en'],{type:'region'}).of(String(c).toUpperCase()):'—'}catch(e){return c||'—'}};
 
 function info(keys,extra){
   const pop=el('span',{class:'pop',role:'tooltip'},el('div',{class:'k'},'Source: Meraki Dashboard API v1 (read-only GET)'));
@@ -857,7 +859,7 @@ function render(){
         el('button',{type:'button',onclick:exportPdf,title:'Open the print dialog; choose Save as PDF'},'PDF')),
       loadErr?el('span',{class:'err'},loadErr):null),
     seg),
-    el('nav',{class:'secnav','aria-label':'Sections'},[['overview','Overview'],['scorecard','Scorecard'],['problem-clients','Problematic clients'],['roaming','Roaming'],['client-bands','Where clients connect'],['band','By band'],['radios','Radio utilization'],['spectrum','RF spectrum'],['rf-config','RF configuration'],['sources','Sources']]
+    el('nav',{class:'secnav','aria-label':'Sections'},[['overview','Overview'],['scorecard','Scorecard'],['problem-clients','Problematic clients'],['roaming','Roaming'],['client-bands','Where clients connect'],['band','By band'],['radios','Radio utilization'],['rf-config','RF configuration'],['sources','Sources']]
       .map(([id,l])=>el('a',{href:'#'+id,onclick:e=>{e.preventDefault();if(id==='sources')document.getElementById('sources').open=true;goTo(id)}},l))));
 
   /* header */
@@ -898,6 +900,16 @@ function render(){
    tiles.append(mkTile('airrm','AI-RRM',on==null?'—':on?'✅ On':'❌ Off',el('div',{class:'s'},sub),
      P&&pon!=null&&on!=null?el('div',{class:'tchg'},el('span',{class:'chip '+(on===pon?'same':on?'good':'bad')},on===pon?'No change':on?'Turned on':'Turned off'),isCross(C,P)?el('span',{class:'muted small'},` ${P.network}: ${pon?'on':'off'}`):null):null,
      on===false?' alertt':nOv?' warnt':''))}
+  {const rg=C.regulatory,has=C.regulatoryRead!==false&&rg!==undefined;
+   const n6=C.aps.reduce((t,a)=>t+(a.radios||[]).filter(r=>String(r.band)==='6').length,0);
+   const unset=rg&&(!rg.countryCode||rg.countryCode==='default');
+   const v=!has?'—':!rg?'Not read':unset?'Not set':`${rg.countryCode} · ${rg.name}`;
+   const sub=!has?'Take a new snapshot to check the country and 6 GHz rules':!rg?'Meraki didn’t return wireless settings':
+     [unset?'No country chosen: Meraki’s default domain':regionName(rg.countryCode),rg.permits6e?`6 GHz permitted ✅ · ${n6} radio${n6===1?'':'s'} on 6 GHz`:`6 GHz not permitted ❌`+(n6?` · but ${n6} radio${n6===1?' is':'s are'} on 6 GHz`:'')].join(' · ');
+   const prg=P?P.regulatory:undefined,chg=P&&prg&&rg&&!isCross(C,P)&&(prg.countryCode!==rg.countryCode||prg.permits6e!==rg.permits6e);
+   tiles.append(mkTile('regulatory','Regulatory domain',v,el('div',{class:'s'},sub),
+     chg?el('div',{class:'tchg'},el('span',{class:'chip bad'},'Changed'),el('span',{class:'muted small'},` was ${prg.countryCode} · ${prg.name}`)):P&&isCross(C,P)&&prg?el('div',{class:'tchg'},el('span',{class:'muted small'},`${P.network}: ${prg.countryCode} · ${prg.name}`)):null,
+     rg&&(unset||(!rg.permits6e&&n6))?' alertt':rg&&rg.permits6e&&!n6?' warnt':''))}
   {const nb=C.neighbors||{},am=C.airMarshal||{},has=nb.containedCount!=null,pol=am.settings&&am.settings.defaultPolicy;
    const pnb=P&&P.neighbors&&P.neighbors.containedCount!=null?P.neighbors:null;
    const sub=has?[`${nf(nb.rogueCount,0)} rogue on your LAN`,`${nf(nb.spoofCount,0)} spoofing your SSIDs`,`${nf(nb.strongBssids,0)} strong neighbours`,pol?`clients joining rogues: ${pol==='block'?'blocked':'allowed'}`:null].filter(Boolean).join(' · '):'Take a new snapshot to see contained, rogue and spoofed networks';
@@ -968,6 +980,36 @@ function render(){
       el('ol',{},on===false?el('li',{},'Turn on AI-RRM in Dashboard: Wireless › Radio settings › AI-RRM. Check your licensing and firmware meet Meraki\u2019s requirements for it first.'):null,
         ov.length?el('li',{},'Review each fixed radio: remove the fixed values unless there\u2019s a deliberate reason for them (Wireless › Radio settings, per AP).'):null,
         el('li',{},'Take another snapshot a week or two after a change and compare: busiest radio, weakest client signal and roaming should improve.')))}
+  else if(openTile==='regulatory'){
+    const rg=C.regulatory,unset=rg&&(!rg.countryCode||rg.countryCode==='default');
+    const r6=C.aps.flatMap(a=>(a.radios||[]).filter(r=>String(r.band)==='6').map(r=>({...r,ap:a.name})));
+    const ss6=[...new Set(r6.flatMap(r=>r.ssids||[]))];
+    const yes=v=>v==null?'—':v?'✅ Yes':'❌ No';
+    const rows=rg?[['Country / region',unset?'Not set (default)':`${regionName(rg.countryCode)} (${rg.countryCode})`,'Set in Dashboard: Network-wide › General. Meraki picks the regulatory domain from it.'],
+      ['Regulatory domain',rg.name||'—','The rule set the APs follow for channels and transmit power, for example FCC (US), ETSI/UK (Europe and UK), ISED (Canada).'],
+      ['6 GHz permitted',yes(rg.permits6e),'Whether Meraki allows 6 GHz (Wi-Fi 6E/7) under this domain. If not, 6 GHz radios stay off.'],
+      ['6 GHz radios broadcasting',`${r6.length} on ${new Set(r6.map(r=>r.ap)).size} of ${C.aps.length} APs`,'Radios seen on 6 GHz when the snapshot was taken.'],
+      ['SSIDs on 6 GHz',ss6.length?ss6.join(', '):'—','SSIDs broadcast on 6 GHz when the snapshot was taken. 6 GHz allows only WPA3 or OWE, so clients there use WPA3 even on mixed WPA2/WPA3 SSIDs.']]:[];
+    const tbl=el('table',{class:'dtable'},el('tbody',{},rows.map(([a,b,c])=>el('tr',{},el('td',{},el('b',{},a)),el('td',{style:'white-space:nowrap'},b),el('td',{class:'muted',style:'white-space:normal'},c)))));
+    const apRows=C.aps.map(a=>{const r=(a.radios||[]).find(x=>String(x.band)==='6');return{name:a.name,model:a.model,address:a.address,r6:r}});
+    const apT=miniTable({id:'reg-aps',rows:apRows,search:'Find an AP or address…',
+      chips:[['all','All',()=>true],['on6','On 6 GHz',x=>!!x.r6],['no6','Not on 6 GHz',x=>!x.r6],['noaddr','No address',x=>!x.address]],
+      cols:[{l:'AP',f:x=>el('b',{},x.name)},{l:'Model',f:x=>x.model||'—'},{l:'6 GHz radio',f:x=>x.r6?`ch ${x.r6.channel} · ${x.r6.width||'—'}`:'—'},{l:'Address in Dashboard',f:x=>x.address?el('span',{style:'white-space:normal'},x.address):el('span',{class:'muted'},'Not set')}],
+      text:x=>[x.name,x.model,x.address].join(' ')});
+    guide=el('div',{class:'guide'},el('div',{class:'guide-h'},el('b',{},'Regulatory domain and 6 GHz',info(['regulatory','status'],'Read when the snapshot was taken.')),closeBtn()),
+      !rg?el('p',{class:'muted'},C.regulatoryRead===false||C.regulatory===undefined?'This snapshot was taken before the regulatory check was added. Take a new snapshot to see it.':'Meraki didn’t return the wireless settings for this network.'):
+      el('div',{},
+        el('p',{},unset?'No country is set for this network, so Meraki uses its default regulatory domain: a restricted set of channels and power, and no 6 GHz.':
+          rg.permits6e?(r6.length?`This network is set to ${regionName(rg.countryCode)}, where Meraki permits 6 GHz, and ${r6.length} radio${r6.length>1?'s are':' is'} using it.`:`This network is set to ${regionName(rg.countryCode)}, where Meraki permits 6 GHz, but no radio is using it. Check the APs support 6 GHz and the RF profile has 6 GHz turned on.`):
+          `This network is set to ${regionName(rg.countryCode)}, where Meraki does not permit 6 GHz.`+(r6.length?` Yet ${r6.length} radio${r6.length>1?'s are':' is'} on 6 GHz: check the country is right.`:'')),
+        tbl,
+        el('h3',{style:'margin-top:8px'},'Spot check: where are the APs?'),
+        el('p',{class:'muted small'},'The country above must be where the APs physically operate. Compare it with each AP’s address in Dashboard; an AP in another country belongs in a network set to that country.'),
+        apT),
+      el('ol',{},
+        unset?el('li',{},'Set the country in Dashboard: Network-wide › General. Until then channels and power are restricted and 6 GHz stays off.'):null,
+        el('li',{},'If any AP address is in a different country, move that AP to a network set to its country. Operating outside the local rules can break the law and causes poor coverage.'),
+        el('li',{},'For 6 GHz: Wi-Fi 6E or 7 APs and clients, WPA3 or OWE on the SSID, and 6 GHz enabled in the RF profile (Wireless › Radio settings).')))}
   else if(openTile==='airmarshal'){
     const nb=C.neighbors||{},am=C.airMarshal||{},st=am.settings,rules=am.rules;
     const rows=[];
@@ -1029,6 +1071,10 @@ function render(){
    const nb=C.neighbors||{};
    if(nb.rogueCount)att.push(['bad',`${nb.rogueCount} rogue network${nb.rogueCount>1?'s were':' was'} seen on your wired LAN.`,'Air Marshal',openT('airmarshal')]);
    if(nb.spoofCount)att.push(['bad',`${nb.spoofCount} network${nb.spoofCount>1?'s are':' is'} broadcasting one of your SSID names.`,'Air Marshal',openT('airmarshal')]);
+   {const rg=C.regulatory,n6=C.aps.reduce((t,a)=>t+(a.radios||[]).filter(r=>String(r.band)==='6').length,0);
+    if(rg&&(!rg.countryCode||rg.countryCode==='default'))att.push(['bad','No country is set for this network: Meraki’s default regulatory domain restricts channels and power and keeps 6 GHz off.','Regulatory domain',openT('regulatory')]);
+    else if(rg&&!rg.permits6e&&n6)att.push(['bad',`6 GHz isn’t permitted in ${regionName(rg.countryCode)}, yet ${n6} radio${n6>1?'s are':' is'} on 6 GHz. Check the network’s country.`,'Regulatory domain',openT('regulatory')]);
+    else if(rg&&rg.permits6e&&!n6)att.push(['warn',`6 GHz is permitted in ${regionName(rg.countryCode)} but no radio is using it.`,'Regulatory domain',openT('regulatory')])}
    const ar=C.autoRf;if(ar&&ar.ai&&ar.ai.enabled===false)att.push(['warn','AI-RRM is off, so Meraki’s AI channel and power planning isn’t used.','AI-RRM',openT('airrm')]);
    const nOv=(C.radioOverrides||[]).reduce((t,x)=>t+x.radios.length,0);if(nOv)att.push(['warn',`${nOv} radio${nOv>1?'s have':' has'} a manually fixed channel, power or width, outside AutoRF’s control.`,'AI-RRM',openT('airrm')]);
    const pr=problemRows(C).filter(x=>!isSynthetic(x)),pT=(C.rates.disconnects||0)+(C.rates.dot1xFailures||0);
@@ -1238,7 +1284,7 @@ function render(){
 
   /* RF spectrum: each band as a channel map. Your radios are drawn across their full channel width,
      split into 802.11 airtime and non-Wi-Fi interference; neighbouring networks from Air Marshal sit underneath. */
-  {const SV='http://www.w3.org/2000/svg';
+  if(SHOW_SPECTRUM){const SV='http://www.w3.org/2000/svg';
    const sv=(tag,a,...kids)=>{const n=document.createElementNS(SV,tag);for(const[k,v]of Object.entries(a||{}))if(v!=null)n.setAttribute(k,v);for(const c of kids.flat())if(c!=null)n.append(c.nodeType?c:document.createTextNode(String(c)));return n};
    const RAD=(C.radios||[]).map(r=>({...r,wifiAvg:r.wifiAvg??(r.avg!=null&&r.nonWifiAvg!=null?Math.max(0,r.avg-r.nonWifiAvg):null)}));
    const bandsHere=['2.4','5','6'].filter(b=>RAD.some(r=>r.band===b));
@@ -1574,6 +1620,11 @@ function render(){
   app.append(el('p',{class:'foot muted small'},'Cisco Meraki WLAN Snapshot · Read-only: GET requests only, no changes made to your Meraki environment.'));
 }
 render();
+/* section links: highlight the section in view */
+(()=>{let raf=0;const spy=()=>{raf=0;const links=[...document.querySelectorAll('.secnav a')];let cur=null;
+  for(const a of links){const s=document.getElementById(a.getAttribute('href').slice(1));if(s&&s.getBoundingClientRect().top<=90)cur=a}
+  links.forEach(a=>{a.classList.toggle('cur',a===(cur||links[0]));a.toggleAttribute('aria-current',a===(cur||links[0]))})};
+ addEventListener('scroll',()=>{if(!raf)raf=requestAnimationFrame(spy)},{passive:true});new MutationObserver(()=>{if(!raf)raf=requestAnimationFrame(spy)}).observe(app,{childList:true});spy()})();
 })();
 </script>
 </body>

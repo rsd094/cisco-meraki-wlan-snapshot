@@ -60,6 +60,7 @@ SOURCES = {
     "packetLoss": ("GET /organizations/{orgId}/wireless/devices/packetLoss/byDevice", "90 days"),
     "events": ("GET /networks/{networkId}/events (productType=wireless)", "60+ days tested; paged 1,000 events per call"),
     "airMarshal": ("GET /networks/{networkId}/wireless/airMarshal", "31 days"),
+    "airMarshalSettings": ("GET /organizations/{orgId}/wireless/airMarshal/settings/byNetwork and /airMarshal/rules", "Current state at capture time"),
     "apStatus": ("GET /organizations/{orgId}/devices/statuses", "Current state at capture time"),
     "clientsNow": ("GET /organizations/{orgId}/wireless/clients/overview/byDevice", "Current state at capture time"),
     "ssids": ("GET /networks/{networkId}/wireless/ssids", "Current state at capture time"),
@@ -95,7 +96,11 @@ ENDPOINTS = [
     {"area": "RF configuration", "path": "GET /organizations/{organizationId}/wireless/radio/overrides/byDevice", "use": "Radios with a manually fixed channel, power or channel width. These are outside AI-RRM's control even when it's on.",
      "shows": "AI-RRM tile", "lookback": "Current", "calls": "1+ (pages of 100)"},
     {"area": "RF configuration", "path": "GET /networks/{networkId}/wireless/airMarshal", "use": "Other networks your APs hear, with signal strength.",
-     "shows": "Strong neighbouring networks", "lookback": "31 days (last 7 days used)", "calls": "1"},
+     "shows": "Air Marshal tile, Strong neighbouring networks", "lookback": "31 days (last 7 days used)", "calls": "1"},
+    {"area": "RF configuration", "path": "GET /organizations/{organizationId}/wireless/airMarshal/settings/byNetwork", "use": "Air Marshal default policy (block or allow clients joining rogue SSIDs) and the scheduled scan setting.",
+     "shows": "Air Marshal tile", "lookback": "Current", "calls": "1"},
+    {"area": "RF configuration", "path": "GET /organizations/{organizationId}/wireless/airMarshal/rules", "use": "Air Marshal allow, block and alert rules that apply to this network.",
+     "shows": "Air Marshal tile", "lookback": "Current", "calls": "1"},
     {"area": "RF configuration", "path": "GET /networks/{networkId}/wireless/ssids", "use": "Enabled SSIDs, their security mode and RADIUS servers.",
      "shows": "RADIUS servers tile", "lookback": "Current", "calls": "1"},
     {"area": "Radio utilization", "path": "GET /networks/{networkId}/networkHealth/channelUtilization", "use": "How busy every radio is, in 10-minute samples, including non-Wi-Fi interference. Each 5 GHz radio on dual-5 GHz APs separately.",
@@ -513,7 +518,7 @@ def snapshot(m, args):
     log(" - roaming (one call per client)")
     ranked = sorted(info.items(), key=lambda kv: -(kv[1].get("usageMb") or 0))
     roam_clients = [(mac, i) for mac, i in ranked if i.get("id")][:MAX_ROAM_CLIENTS]
-    roams, sticky, skipped = {}, {}, max(0, len([1 for _, i in ranked if i.get("id")]) - MAX_ROAM_CLIENTS)
+    roams, sticky, conns, skipped = {}, {}, {}, max(0, len([1 for _, i in ranked if i.get("id")]) - MAX_ROAM_CLIENTS)
     for n, (mac, i) in enumerate(roam_clients, 1):
         if n % 25 == 0:
             log("   %d of %d clients" % (n, len(roam_clients)))
@@ -523,10 +528,14 @@ def snapshot(m, args):
         except SystemExit:
             continue
         r, st = _roams(evs)
+        cs = _connections(evs)
+        if cs:
+            conns[mac] = cs
         if r:
             roams[mac] = r
         if st:
             sticky[mac] = st
+    snap["clientConnections"] = conns
     snap["roaming"] = {"roams": roams, "sticky": sticky, "clientsChecked": len(roam_clients), "clientsSkipped": skipped,
                        "rules": {"badMs": BAD_ROAM_MS, "subMs": SUB_ROAM_MS, "pingPongSeconds": PING_PONG_SECONDS,
                                  "pingPongClientMin": PING_PONG_CLIENT_MIN, "gapSeconds": GAP_SECONDS}}
@@ -547,10 +556,19 @@ def snapshot(m, args):
     snap["events"] = _events(m, nid, t0, t1, snap["aps"])
 
     log(" - neighbouring networks (Air Marshal)")
-    am = m.get("/networks/%s/wireless/airMarshal" % nid,
-               {"t0": iso(max(t0, t1 - dt.timedelta(days=7)))},
-               allow_fail=True) or []
-    snap["neighbors"] = _neighbors(am, serials)
+    am_t0 = max(t0, t1 - dt.timedelta(days=7))
+    am = m.get("/networks/%s/wireless/airMarshal" % nid, {"t0": iso(am_t0)}, allow_fail=True)
+    snap["neighbors"] = _neighbors(am or [], serials, list(snap.get("radioUtil", {}).values()),
+                                   {x.get("name") for x in snap.get("ssids") or [] if x.get("name")}, am_t0)
+    snap["neighbors"]["available"] = am is not None
+    st = m.get("/organizations/%s/wireless/airMarshal/settings/byNetwork" % oid, {"networkIds": [nid]}, allow_fail=True)
+    st = next((i for i in (st or {}).get("items", []) if i.get("networkId") == nid), None) if isinstance(st, dict) else None
+    rules = m.get("/organizations/%s/wireless/airMarshal/rules" % oid, {"networkIds": [nid]}, allow_fail=True)
+    rules = [{"type": r.get("type"), "matchType": (r.get("match") or {}).get("type"), "match": (r.get("match") or {}).get("string")}
+             for r in ((rules or {}).get("items", []) if isinstance(rules, dict) else [])
+             if not r.get("network") or (r.get("network") or {}).get("id") == nid]
+    snap["airMarshal"] = {"settings": st and {"defaultPolicy": st.get("defaultPolicy"), "scan": st.get("scan")},
+                          "rules": rules if isinstance(rules, list) else None}
 
     snap["apiCalls"] = len(m.calls)
     snap["apiErrors"] = [c for c in m.calls if c.get("status", 200) >= 400]
@@ -708,12 +726,75 @@ def _events(m, nid, t0, t1, aps):
             "topClients": [{"client": c, "events": n} for c, n in top], "pages": pages}
 
 
-def _neighbors(am, serials):
-    bssids, strong = 0, 0
-    ssids = set()
-    top = []
+_CH5 = set(range(36, 65, 4)) | set(range(100, 145, 4)) | set(range(149, 178, 4))
+_BLK5 = {40: [range(36, 41, 4), range(44, 49, 4), range(52, 57, 4), range(60, 65, 4), range(100, 105, 4), range(108, 113, 4),
+              range(116, 121, 4), range(124, 129, 4), range(132, 137, 4), range(140, 145, 4), range(149, 154, 4), range(157, 162, 4),
+              range(165, 170, 4), range(173, 178, 4)],
+         80: [range(36, 49, 4), range(52, 65, 4), range(100, 113, 4), range(116, 129, 4), range(132, 145, 4), range(149, 162, 4), range(165, 178, 4)],
+         160: [range(36, 65, 4), range(100, 129, 4), range(149, 178, 4)]}
+
+
+def _nbr_band(ch):
+    """Air Marshal gives a channel number but no band. 1-14 = 2.4 GHz, valid 5 GHz numbers = 5 GHz, else 6 GHz."""
+    if ch is None:
+        return None
+    return "2.4" if ch <= 14 else "5" if ch in _CH5 else "6"
+
+
+def _overlaps(radio, ch):
+    """Does a neighbour's primary channel fall inside (or, on 2.4 GHz, overlap) this radio's channel?"""
+    band, rc = str(radio.get("band") or ""), radio.get("channel")
+    if rc is None or _nbr_band(ch) != band:
+        return False
+    if band == "2.4":
+        return abs(rc - ch) < 5
+    mhz = int(re.sub(r"\D", "", str(radio.get("width") or "20")) or 20)
+    if band == "5":
+        for blk in _BLK5.get(mhz, []):
+            if rc in blk:
+                return ch in blk
+        return ch == rc
+    size = max(1, mhz // 20) * 4      # 6 GHz: channels 1, 5, 9 ... grouped in blocks
+    return (rc - 1) // size == (ch - 1) // size
+
+
+def _neighbors(am, serials, radios=(), our_ssids=(), since=None):
+    """Summarise Air Marshal: neighbours, contained, rogue (seen on your LAN), spoofs, open networks, co-channel."""
+    since_ts = since.timestamp() if since else 0
+    bssids, strong, new = 0, 0, 0
+    ssids, top, contained, rogues, spoofs, opn = set(), [], [], [], [], []
+    by_ch, enc = {}, {}
+    co = {("%s|%s" % (r.get("serial"), r.get("radio"))): {"serial": r.get("serial"), "ap": r.get("ap"), "band": r.get("band"),
+                                                           "channel": r.get("channel"), "width": r.get("width"), "nets": 0, "strong": 0}
+          for r in radios}
     for s in am or []:
+        name = s.get("ssid") or "(hidden)"
+        det_all = [d for b in s.get("bssids") or [] for d in b.get("detectedBy") or [] if d.get("device") in serials]
+        if not det_all:
+            continue
         ssids.add(s.get("ssid"))
+        types = [str(x).lower() for x in s.get("types") or []]
+        chans = [c for c in s.get("channels") or [] if isinstance(c, int)]
+        e = s.get("encryption") or "Open"
+        enc[e] = enc.get(e, 0) + 1
+        best_ssid = max(d.get("rssi") or 0 for d in det_all)
+        if (s.get("firstSeen") or 0) >= since_ts:
+            new += 1
+        info = {"ssid": name, "channels": chans, "encryption": e, "firstSeen": s.get("firstSeen"), "lastSeen": s.get("lastSeen"),
+                "manufacturer": (s.get("manufacturers") or [None])[0], "types": s.get("types") or [],
+                "wiredMacs": (s.get("wiredMacs") or [])[:5], "wiredVlans": [v for v in s.get("wiredVlans") or [] if v],
+                "wiredLastSeen": s.get("wiredLastSeen") or None}
+        for c in chans:
+            b = by_ch.setdefault(c, {"channel": c, "band": _nbr_band(c), "nets": 0, "strong": 0})
+            b["nets"] += 1
+            b["strong"] += best_ssid >= 25
+        for k, r in co.items():
+            if any(_overlaps(r, c) for c in chans):
+                mine = [d.get("rssi") or 0 for d in det_all if d.get("device") == r["serial"]]
+                if mine:
+                    r["nets"] += 1
+                    r["strong"] += max(mine) >= 25
+        bs = []
         for b in s.get("bssids") or []:
             det = [d for d in b.get("detectedBy") or [] if d.get("device") in serials]
             if not det:
@@ -722,11 +803,41 @@ def _neighbors(am, serials):
             best = max(det, key=lambda d: d.get("rssi") or 0)
             if (best.get("rssi") or 0) >= 25:
                 strong += 1
-            top.append({"ssid": s.get("ssid") or "(hidden)", "bssid": b.get("bssid"), "rssi": best.get("rssi"),
-                        "heardBy": best.get("device"), "aps": len(det), "contained": b.get("contained")})
+            row = dict(info, bssid=b.get("bssid"), rssi=best.get("rssi"), heardBy=best.get("device"), aps=len(det), contained=bool(b.get("contained")))
+            top.append(row)
+            bs.append(row)
+            if b.get("contained"):
+                contained.append(row)
+        best_row = max(bs, key=lambda x: x["rssi"] or 0)
+        if "rogue" in types or info["wiredMacs"] or info["wiredVlans"]:
+            rogues.append(best_row)
+        if (s.get("ssid") in our_ssids) or "spoof" in " ".join(types):
+            spoofs.append(best_row)
+        if e in ("Open", "WEP"):
+            opn.append(best_row)
     top.sort(key=lambda x: -(x["rssi"] or 0))
-    return {"ssids": len(ssids), "bssids": bssids, "strongBssids": strong, "top": top[:40],
+    srt = lambda L: sorted(L, key=lambda x: -(x["rssi"] or 0))
+    return {"ssids": len(ssids), "bssids": bssids, "strongBssids": strong, "newSsids": new, "top": top[:40],
+            "contained": srt(contained)[:100], "containedCount": len(contained),
+            "rogues": srt(rogues)[:50], "rogueCount": len(rogues), "spoofs": srt(spoofs)[:50], "spoofCount": len(spoofs),
+            "open": srt(opn)[:50], "openCount": len(opn), "encryption": enc,
+            "byChannel": sorted(by_ch.values(), key=lambda b: (-b["nets"], b["channel"]))[:30],
+            "coChannel": sorted(co.values(), key=lambda r: (-r["strong"], -r["nets"])),
+            "since": iso(since) if since else None,
             "note": "Strong = heard by one of your APs at 25 dB or more."}
+
+
+def _connections(evs):
+    """Count a client's successful connections per AP, band, channel and SSID."""
+    agg = {}
+    for e in evs or []:
+        if e.get("type") != "connection" or e.get("subtype") not in (None, "success"):
+            continue
+        k = (e.get("deviceSerial"), str(e.get("band") or ""), e.get("channel"), e.get("ssidNumber"))
+        a = agg.setdefault(k, {"serial": k[0], "band": k[1], "channel": k[2], "ssid": k[3], "n": 0, "last": None})
+        a["n"] += 1
+        a["last"] = max(a["last"] or "", e.get("occurredAt") or "")
+    return list(agg.values())
 
 
 def _roams(evs):
@@ -829,7 +940,7 @@ def summarize(s):
     out = {"label": s["label"], "window": s["window"], "capturedAt": s["capturedAt"], "network": s["network"]["name"],
            "networkId": s["network"]["id"], "org": s["org"]["name"],
            "notes": s.get("notes", []), "aps": s["aps"], "rfProfiles": s.get("rfProfiles"), "autoRf": s.get("autoRf"),
-           "neighbors": s.get("neighbors"), "apiCalls": s.get("apiCalls"), "apiErrors": len(s.get("apiErrors", [])),
+           "neighbors": s.get("neighbors"), "airMarshal": s.get("airMarshal"), "apiCalls": s.get("apiCalls"), "apiErrors": len(s.get("apiErrors", [])),
            "ssids": s.get("ssids", []), "radioOverrides": s.get("radioOverrides")}
     # clients
     daily = {b: mean([p["v"] for p in s["clients"].get(b, [])]) for b in ["all"] + BANDS}
@@ -855,6 +966,12 @@ def summarize(s):
         pl[b] = {"upPct": rnd(100 * up_l / up_t, 2) if up_t else None, "downPct": rnd(100 * dn_l / dn_t, 2) if dn_t else None,
                  "upPackets": up_t}
     out["packetLoss"] = pl
+    names = {a["serial"]: a["name"] for a in s["aps"]}
+    out["apLoss"] = sorted([{"ap": names.get(ser, ser), "upPct": rnd(100 * ((d.get("up") or {}).get("lost") or 0) / (d.get("up") or {}).get("total"), 1),
+                             "downPct": rnd(100 * ((d.get("down") or {}).get("lost") or 0) / (d.get("down") or {}).get("total"), 1) if (d.get("down") or {}).get("total") else None,
+                             "lost": (d.get("up") or {}).get("lost"), "total": (d.get("up") or {}).get("total")}
+                            for ser, d in (s["packetLoss"].get("all") or {}).items() if (d.get("up") or {}).get("total")],
+                           key=lambda x: -(x["upPct"] or 0))
     # radios
     out["radios"] = [{k: v for k, v in r.items() if k not in ("hourly", "dailyP95")} for r in s.get("radioUtil", {}).values()]
     util_band = {}
@@ -957,6 +1074,16 @@ def summarize(s):
     rows.sort(key=lambda r: -((r.get("success") or 0) + (r.get("failures") or 0) + r["disconnects"]))
     out["clientRows"] = rows[:500]
     out["roaming"] = _roam_summary(s)
+    # where clients connect: one row per client, AP, band, channel and SSID
+    cc = s.get("clientConnections")
+    if cc is not None:
+        apn = {a["serial"]: a["name"] for a in s["aps"]}
+        info = (s.get("clientDetail") or {}).get("info", {})
+        out["ssidNames"] = {str(x["number"]): x["name"] for x in s.get("ssids", [])}
+        out["clientConns"] = [{"mac": mac, "name": (info.get(mac) or {}).get("name") or mac, "maker": (info.get(mac) or {}).get("manufacturer"),
+                               "os": (info.get(mac) or {}).get("os"), "ap": apn.get(c["serial"], c["serial"]), "serial": c["serial"],
+                               "band": c["band"], "ch": c["channel"], "ssid": c["ssid"], "n": c["n"], "last": c["last"]}
+                              for mac, lst in cc.items() for c in lst]
     out["rates"] = {
         "disconnectsPerClientDay": rnd(dis / client_days, 2) if client_days else None,
         "dot1xFailPerClientDay": rnd(dot / client_days, 3) if client_days else None,

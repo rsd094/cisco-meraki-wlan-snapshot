@@ -47,6 +47,16 @@ Each snapshot saves two files in the `snapshots` folder:
 - `Network-label-YYYYMMDD-HHMM.json`: the data. Keep it; it's the only record once Meraki deletes the history.
 - `Network-label-YYYYMMDD-HHMM.html`: the report for that snapshot.
 
+**How a report reads.** Most important first, detail one click away:
+
+1. **Things to look at**: the facts that need someone's attention, most serious first: APs not online, RADIUS timeouts, rogue or spoofed networks, AI-RRM off or radios fixed manually, clients to check, ping-pong and sticky clients, and, in a comparison, metrics that got worse. Healthy items are left out. Each has a button to its detail.
+2. **Overview tiles**: infrastructure (APs, RADIUS, AI-RRM, Air Marshal), then the key client-experience numbers. Click a tile for its review guide.
+3. **Scorecard**: every metric with its daily trend. Click a row for the clients, radios or networks behind it.
+4. Then a client's experience in order: **Problematic clients** (who has problems and what to do, then where joins fail and which APs log the events), **Roaming**, **Where clients connect** and **By band**.
+5. Then the RF underneath: **Radio utilization** and **RF configuration**, and finally **Sources and method**.
+
+A bar of section links stays at the top of the page as you scroll.
+
 **The period** is how much history a snapshot captures, counting back from when you click Generate report. The default and maximum is 14 days, because Meraki keeps per-radio detail for only 14 days. Use the same period every time so snapshots compare fairly. AP status and radio settings are read at the moment of capture.
 
 **Comparing:** open a report through the app and pick another snapshot of the same network under **Compare with**, or use **Import snapshot…** to pick a `.json` from anywhere. A single snapshot shows values with no judgement; a comparison colours each change **green** (better), **red** (worse) or **grey** (no change beyond normal day-to-day variation). Snapshots can be any distance apart, today and a year from now. The report warns you if two periods overlap or are different lengths.
@@ -77,7 +87,9 @@ Every figure in a report comes from these calls. The same list is shown in the a
 | RF configuration | `GET /networks/{networkId}/wireless/rfProfiles` | Band steering, minimum bitrates, channel widths and flex-radio settings. | RF configuration | Current | 1 |
 | RF configuration | `GET /organizations/{organizationId}/wireless/radio/rrm/byNetwork` | AutoRF settings: whether AI-RRM is on and when it was enabled, FRA, busy-hour behaviour, channel avoidance. | AI-RRM tile, RF configuration | Current | 1 |
 | RF configuration | `GET /organizations/{organizationId}/wireless/radio/overrides/byDevice` | Radios with a manually fixed channel, power or channel width. These are outside AI-RRM's control even when it's on. | AI-RRM tile | Current | 1+ (pages of 100) |
-| RF configuration | `GET /networks/{networkId}/wireless/airMarshal` | Other networks your APs hear, with signal strength. | Strong neighbouring networks | 31 days (last 7 days used) | 1 |
+| RF configuration | `GET /networks/{networkId}/wireless/airMarshal` | Other networks your APs hear, with signal strength. | Air Marshal tile, Strong neighbouring networks | 31 days (last 7 days used) | 1 |
+| RF configuration | `GET /organizations/{organizationId}/wireless/airMarshal/settings/byNetwork` | Air Marshal default policy (block or allow clients joining rogue SSIDs) and the scheduled scan setting. | Air Marshal tile | Current | 1 |
+| RF configuration | `GET /organizations/{organizationId}/wireless/airMarshal/rules` | Air Marshal allow, block and alert rules that apply to this network. | Air Marshal tile | Current | 1 |
 | RF configuration | `GET /networks/{networkId}/wireless/ssids` | Enabled SSIDs, their security mode and RADIUS servers. | RADIUS servers tile | Current | 1 |
 | Radio utilization | `GET /networks/{networkId}/networkHealth/channelUtilization` | How busy every radio is, in 10-minute samples, including non-Wi-Fi interference. Each 5 GHz radio on dual-5 GHz APs separately. | Busiest radio tile, radio utilization, scorecard | 14 days (Meraki refuses older 10-minute data) | 2 (7-day pages) |
 | Clients and traffic | `GET /networks/{networkId}/wireless/clientCountHistory` | Clients per day, for the whole network and for each band. | Clients per day, band share | 31 days | 4 |
@@ -116,6 +128,7 @@ Wireless event types read from the event log: `disassociation`, `wpa_deauth`, `8
 | Weakest client signal | The lowest average client SNR of any AP and band | `wireless/signalQualityHistory` |
 | Clients on 5 or 6 GHz | 5 GHz + 6 GHz share of average daily clients per band | `wireless/clientCountHistory` |
 | Strong neighbouring networks | Other networks' BSSIDs heard by one of your APs at 25 dB or more, last 7 days | `wireless/airMarshal` |
+| Air Marshal | Contained BSSIDs (Meraki's `contained` flag); rogue = an SSID Meraki classes as rogue or saw on your wired LAN; spoofing = a neighbour broadcasting one of your SSID names; open = no encryption or WEP. Also the default policy for clients joining rogue SSIDs, any Air Marshal rules, and which of your radios share a channel (across its full width) with neighbours heard by that AP. Last 7 days | `wireless/airMarshal`, `wireless/airMarshal/settings/byNetwork`, `wireless/airMarshal/rules` |
 | Good roams / bad roams | Share of roams in each class (see below) | `clients/{clientId}/connectivityEvents` |
 | Average roam time | Mean of Meraki's measured roam times; roams Meraki didn't time are left out | `clients/{clientId}/connectivityEvents` |
 | Ping-pong / sticky clients | See below | `clients/{clientId}/connectivityEvents` |

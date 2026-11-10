@@ -149,8 +149,27 @@ input[type=file]{display:none}
 .guide-h{display:flex;justify-content:space-between;align-items:center}
 .guide .x{border:0;background:transparent;font-size:20px;line-height:1;padding:0 4px;color:var(--muted)}
 .guide a{color:var(--accent)}
-.ptable{font-size:13px}.ptable td{vertical-align:top;white-space:nowrap}.ptable th{white-space:nowrap}
-.ptable td:first-child{white-space:normal;min-width:200px;max-width:320px;overflow-wrap:anywhere}
+.ptable{font-size:13px}.ptable td{vertical-align:top}.ptable th{white-space:nowrap}
+.ptable td:first-child{min-width:200px;max-width:280px;overflow-wrap:anywhere}
+.ptable td:nth-child(2){white-space:nowrap}
+.pc-name{display:flex;align-items:flex-start;gap:7px}.pc-name .dot{margin-top:5px}
+.pc-cause{font-weight:600;margin-bottom:4px;max-width:340px}
+.pc-sig{display:flex;flex-wrap:wrap;gap:4px;max-width:340px}
+.pc-do ol{margin:0;padding-left:18px;max-width:420px}.pc-do li{margin:2px 0}
+.pc-btns{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:6px}
+tr.pc-same td{opacity:.7}
+.bandbtns{gap:8px;margin:0}
+.bandbtn{flex-direction:column;align-items:flex-start;gap:1px;border-radius:10px;padding:8px 14px;min-width:150px}
+.bandbtn .bb-l{font-weight:650;font-size:14px}.bandbtn .bb-n{font-size:20px;font-weight:650;font-variant-numeric:tabular-nums}.bandbtn .bb-s{font-size:11px;color:var(--muted)}
+.cbfilters{display:flex;flex-wrap:wrap;gap:12px;align-items:center}
+.cbfilters label{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:6px}
+.cbgrid{grid-template-columns:minmax(0,1fr) minmax(0,1.6fr)}
+@media (max-width:1000px){.cbgrid{grid-template-columns:minmax(0,1fr)}}
+.cbar{height:9px;background:var(--soft);border-radius:3px;overflow:hidden}.cbar span{display:block;height:100%;border-radius:3px}
+:root{--b24:#d97706;--b5:#2a78d6;--b6:#1baf7a}
+.qb.band24{background:color-mix(in srgb,var(--b24) 18%,transparent);color:var(--b24)}.qb.band5{background:color-mix(in srgb,var(--b5) 18%,transparent);color:var(--b5)}.qb.band6{background:color-mix(in srgb,var(--b6) 18%,transparent);color:var(--b6)}
+tr.rrow2{cursor:pointer}tr.rrow2:hover td{background:var(--soft)}tr.rrow2.rsel td{background:var(--call)}
+.tlink{font-size:12px;color:var(--accent);margin-top:4px;font-weight:600}
 .gbtn.sm{font-size:12px;padding:4px 10px;white-space:nowrap}
 .guide-acts{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-top:6px;padding-top:12px;border-top:1px solid var(--line)}
 .gbtn{font:inherit;font-size:14px;font-weight:600;display:inline-flex;align-items:center;gap:8px;padding:8px 14px;border-radius:8px;cursor:pointer;border:1px solid var(--accent);background:transparent;color:var(--accent)}
@@ -251,6 +270,23 @@ tr.rrow:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
 .laxis{display:flex;justify-content:space-between;font-size:11px;color:var(--faint);margin-left:calc(min(170px,30%) + 10px)}
 @media print{.rdot{border-color:#fff}}
 @media (max-width:640px){.spark{width:80px}.mexp{max-width:none}}
+.amtags{margin-left:6px}.amtags .chip{margin-left:4px;font-size:11px}
+.ambars{display:grid;gap:4px;max-width:640px}.ambar{display:grid;grid-template-columns:90px 1fr 140px;align-items:center;gap:8px;font-size:13px}
+.ambar .t{height:10px;background:var(--line);border-radius:5px;overflow:hidden}.ambar .f{display:block;height:100%;background:var(--accent)}
+.ambar .n{color:var(--muted);font-variant-numeric:tabular-nums}
+.secnav{position:sticky;top:0;z-index:20;display:flex;flex-wrap:wrap;gap:4px 16px;padding:8px 14px;font-size:13px;background:var(--bg);border-bottom:1px solid var(--line);margin:-6px 0}
+.secnav a{color:var(--muted);text-decoration:none}.secnav a:hover{color:var(--fg);text-decoration:underline}
+section,details{scroll-margin-top:52px}
+.attn{border:1px solid var(--line);border-left:4px solid var(--warn,#c98a14);border-radius:10px;background:var(--panel);padding:12px 14px}
+.attn.clear{border-left-color:var(--good,#2f8f5b)}
+.attn-h{display:flex;flex-wrap:wrap;gap:8px;align-items:baseline}
+.attn ul{list-style:none;margin:8px 0 0;padding:0;display:grid;gap:6px}
+.attn li{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center}
+.attn .gbtn.sm{white-space:nowrap}
+.subsec{display:flex;flex-direction:column;gap:12px;margin-top:6px}.subh{font-size:15px;margin:0}
+@media (max-width:640px){.attn li{grid-template-columns:auto 1fr}.attn li .gbtn{grid-column:2}.secnav{position:static}}
+@media print{.secnav{display:none}}
+@media (max-width:640px){.ctrls,.ctrls label{min-width:0;max-width:100%;flex-wrap:wrap}.ctrls select{max-width:100%;min-width:0}.exp{flex-wrap:wrap}}
 </style>
 </head>
 <body>
@@ -334,8 +370,10 @@ const M=[
  {id:'nbr',n:'Strong neighbouring networks',src:'airMarshal',v:S=>get(S,'neighbors.strongBssids'),d:0,hi:false,ctx:true,rel:true,tol:.1,
   x:'Other networks your APs hear at 25 dB or more. They compete for the same airtime.'},
  {g:'Roaming',desc:'When clients move between APs, do they move quickly and to a better signal?'},
- {id:'roamGood',n:'Good roams',src:'roaming',v:S=>{const t=get(S,'roaming.totals');return t&&t.roams?100*t.good/t.roams:null},u:'%',d:0,hi:true,tgt:[90,'≥ 90%'],tol:2,daily:S=>(get(S,'roaming.daily')||[]).map(([d,x])=>{const n=x.good+x.sub+x.bad;return[d,n?100*x.good/n:null]}),
-  x:'Share of roams that were quick, landed on a stronger or equal signal, and kept the client connected.'},
+ {id:'roamGood',n:'Good roams',src:'roaming',v:S=>{const t=get(S,'roaming.totals');return t&&t.roams?100*t.good/t.roams:null},u:'%',d:1,hi:true,tgt:[90,'≥ 90%'],tol:2,daily:S=>(get(S,'roaming.daily')||[]).map(([d,x])=>{const n=x.good+x.sub+x.bad;return[d,n?100*x.good/n:null]}),
+  x:'Share of roams that were quick (under 1 second), landed on an equal or stronger signal, and kept the client connected.'},
+ {id:'roamSub',n:'Suboptimal roams',src:'roaming',v:S=>{const t=get(S,'roaming.totals');return t&&t.roams?100*t.sub/t.roams:null},u:'%',d:1,hi:false,tol:1,daily:S=>(get(S,'roaming.daily')||[]).map(([d,x])=>[d,x.sub]),
+  x:'Roams that worked but not cleanly: over 1 second, a weaker signal on the new AP, or off the network more than 10 seconds. Good + suboptimal + bad = 100% (each is rounded, so the shown figures can be 0.1 off).'},
  {id:'roamBad',n:'Bad roams',src:'roaming',v:S=>{const t=get(S,'roaming.totals');return t&&t.roams?100*t.bad/t.roams:null},u:'%',d:1,hi:false,tgt:[2,'< 2%'],tol:.5,daily:S=>(get(S,'roaming.daily')||[]).map(([d,x])=>[d,x.bad]),dailyNote:'bad roams per day',
   x:'Roams that took over 3 seconds, or landed on a signal 10 dB or more weaker (Meraki’s definition).'},
  {id:'roamMs',n:'Average roam time',src:'roaming',v:S=>get(S,'roaming.totals.avgMs'),u:' ms',d:0,hi:false,tgt:[150,'< 150 ms'],tol:10,
@@ -364,6 +402,7 @@ const GUIDE={
  nonwifi:{b:'Above about 10%, a nearby non-Wi-Fi source is taking real airtime.',fp:'Brief spikes (a microwave at lunch, radar on 5 GHz DFS channels) are normal; look for sustained levels.'},
  snr:{b:'Common minimum for reliable data. Voice designs often aim for 25–30 dB.',fp:'This is the weakest AP and band, often driven by a few clients far from the AP.'},
  roamGood:{b:'Rough estimate only; healthy networks with good overlap see most roams as good.',fp:'A couple of devices at the edge of coverage can produce most of the suboptimal roams.'},
+ roamSub:{b:'No fixed rule; a falling share over time is what matters.',fp:'Clients walking out of range end on a weaker signal, which counts as suboptimal.'},
  roamBad:{b:'Bad roams should be rare. Each one is a likely drop or stall in a call or app.',fp:'Clients walking out of the building end their last roam on a weak signal.'},
  roamMs:{b:'Voice over Wi-Fi needs roams under about 150 ms; 802.11r keeps them under 50 ms.',fp:'One slow 802.1X roam among few roams pulls the average up.'},
  pingpong:{b:'Ideally no client ping-pongs.',fp:'A device sitting exactly between two APs can bounce without users noticing.'},
@@ -390,13 +429,11 @@ const byId=Object.fromEntries(MET.map(m=>[m.id,m]));
 /* ---------- overview tiles and their review guides ---------- */
 const busiest=S=>{let best=null;for(const r of S.radios||[])if(r.p95!=null&&(best==null||r.p95>best.p95))best=r;return best};
 const TILES=[
- {id:'success',k:'Connection success',m:'success',sub:S=>{const c=get(S,'connections.all');return c?`${nf(c.failures,0)} failed of ${nf(c.success+c.failures,0)} joins`:''},jump:'issues'},
- {id:'auth',k:'Auth failure rate',m:'auth',sub:S=>`${nf(get(S,'connections.all.auth'),0)} auth failures · ${nf(S.rates.dot1xFailures,0)} 802.1X failures`,jump:'issues'},
- {id:'disc',k:'Disconnects per client a day',m:'disc',sub:S=>{const t=(S.events.topClients||[]).slice(0,3),tot=(S.rates.disconnects||0)+(S.rates.dot1xFailures||0);return tot?`Top 3 clients cause ${nf(100*t.reduce((a,c)=>a+c.events,0)/tot,0)}%`:''},jump:'issues'},
+ {id:'success',k:'Connection success',m:'success',sub:S=>{const c=get(S,'connections.all');return c?`${nf(c.failures,0)} failed of ${nf(c.success+c.failures,0)} joins`:''},jump:'problem-clients'},
+ {id:'auth',k:'Auth failure rate',m:'auth',sub:S=>`${nf(get(S,'connections.all.auth'),0)} auth failures · ${nf(S.rates.dot1xFailures,0)} 802.1X failures`,jump:'problem-clients'},
  {id:'radio',k:'Busiest radio at peak',m:null,v:S=>(busiest(S)||{}).p95,u:'%',d:0,hi:false,tol:2,sub:S=>{const b=busiest(S);return b?`${b.ap} · ${band(b.band)} ch ${b.channel}`:''},jump:'radios'},
  {id:'snr',k:'Weakest client signal',m:'snr',sub:S=>{const w=worstSnr(S);return w?`${w.ap} · ${band(w.band)}`:''},jump:'band'},
- {id:'loss',k:'Upstream packet loss',m:'loss',sub:S=>{const r=['2.4','5','6'].map(b=>[b,get(S,['packetLoss',b,'upPct'])]).filter(x=>x[1]!=null).sort((a,b)=>b[1]-a[1])[0];return r?`Highest on ${band(r[0])}: ${nf(r[1],1)}%`:''},jump:'band'},
- {id:'voice',k:'Slow voice packets',m:'voice',sub:()=>'Voice traffic taking 32 ms or more',jump:'band'},
+ {id:'loss',k:'Upstream packet loss',m:'loss',sub:S=>{const w=(S.apLoss||[])[0],c=topLossClients(S)[0];return w?`Client → AP. Worst AP: ${w.ap} ${nf(w.upPct,1)}%`+(c?` · ${c.name||c.mac} causes ${nf(c.share,0)}% of lost packets`:''):'Client → AP direction'},jump:'band'},
  {id:'roaming',k:'Good roams',m:'roamGood',sub:S=>{const t=get(S,'roaming.totals');return t?`${nf(t.roams,0)} roams · ${nf(t.sub,0)} suboptimal · ${nf(t.bad,0)} bad · avg ${nf(t.avgMs,0)} ms`:'Take a new snapshot to see roaming'},jump:'roaming'},
  {id:'clients',k:'Clients per day',m:'clients',sub:S=>`${nf(get(S,'trafficGbPerDay.all'),1)} GB of traffic a day`,jump:'band'},
 ];
@@ -415,8 +452,11 @@ function review(id,C){
      steps:[b?`${b.ap} on ${band(b.band)} channel ${b.channel} is the busiest.`:'',b&&b.band==='2.4'?'Fewer SSIDs broadcasting on 2.4 GHz frees airtime: each SSID sends its own beacons.':'Check whether a narrower channel width would reduce contention.','Raise the minimum bitrate so slow clients take less airtime.','Compare with strong neighbouring networks (RF configuration). If neighbours are the cause, a different channel helps more than settings on your side.']},
    snr:{what:'How clearly clients hear the AP, on the weakest AP and band. Lower means slower, less reliable connections.',
      steps:[w?`${w.ap} on ${band(w.band)} is the weakest at ${nf(w.snr,0)} dB.`:'','Check where that AP is mounted and what is between it and its clients.','Check its transmit power in RF configuration; AutoRF may have turned it down.','If clients there must work reliably, consider another AP.']},
-   loss:{what:'Packets lost on the way from client to AP. Loss in this direction usually comes from clients transmitting too weakly.',
-     steps:['Check the By band table to see which band loses most.','Raise the minimum bitrate on that band to push weak clients to a better AP.','Look at the weakest client signal: low SNR and upstream loss usually go together.']},
+   loss:{what:'Upstream loss is in the client → AP direction: packets a client sends that never reach the AP. The AP is where it\u2019s measured, so the AP named here is the one receiving the most failed client traffic, not a faulty AP. AP → client (downstream) is shown alongside for comparison.',
+     steps:[(()=>{const a=C.apLoss||[];return a.length?'By AP: '+a.map(x=>`${x.ap} ${nf(x.upPct,1)}% up / ${x.downPct!=null?nf(x.downPct,1):'—'}% down`).join(' · ')+'. '+(a.length>1&&a[a.length-1].upPct>=2?'Every AP sees loss, so it\u2019s the clients rather than one AP.':'Start with the AP at the top.'):''})(),
+       (()=>{const c=topLossClients(C).slice(0,3);return c.length?'Clients losing the most packets: '+c.map(x=>`${x.name||x.mac} (${nf(x.share,0)}% of lost packets, ${nf(x.upLossPct,1)}% of its own)`).join(', ')+'. Check where they sit and whether they\u2019re on 2.4 GHz; update their Wi-Fi drivers.':''})(),
+       'Raise the minimum bitrate so distant clients move to a closer AP instead of sending at low rates.',
+       'Low client signal and upstream loss usually go together: compare with the Weakest client signal tile.']},
    voice:{what:'Share of voice-marked traffic taking 32 ms or more over the air.',
      steps:['Check which SSID your voice devices use and that QoS (WMM / DSCP) is set for voice on it.','Keep voice devices on 5 or 6 GHz.','If you have no voice devices, this figure comes from a few mismarked packets and can be ignored.']},
    roaming:{what:'How well clients move between APs: how quickly, and whether they land on a better signal.',
@@ -427,7 +467,7 @@ function review(id,C){
   };
   return R[id];
 }
-let openTile=null, showG=false, showAllProblem=false;
+let openTile=null, showG=false, showAllProblem=false, cbBand='all', cbSsid='all', cbRadio='all', cbQ='';
 const isCross=(C,P)=>!!P&&(P.networkId&&C.networkId?P.networkId!==C.networkId:P.network!==C.network);
 const baseName=(C,P)=>isCross(C,P)?P.network:'Baseline';
 const curName=(C,P)=>isCross(C,P)?C.network:'This snapshot';
@@ -449,7 +489,7 @@ function miniTable(o){
   return el('div',{class:'mini',id:o.id},el('div',{class:'drow'},chips,search,count),
     el('div',{class:'tbl-wrap mini-scroll'},el('table',{class:'dtable'},el('thead',{},el('tr',{},o.cols.map(c=>el('th',{class:c.num?'num':null,style:'padding:6px 8px'},c.l)))),body)));
 }
-const SECTION_NAME={issues:'Client issues',radios:'Radio utilization',band:'By band',roaming:'Roaming',scorecard:'Scorecard'};
+const SECTION_NAME={'client-bands':'Where clients connect','problem-clients':'Problematic clients',radios:'Radio utilization',band:'By band',roaming:'Roaming',scorecard:'Scorecard'};
 function goTo(id){const e=document.getElementById(id);if(!e)return;e.scrollIntoView({behavior:'smooth',block:'start'});e.classList.remove('flash');void e.offsetWidth;e.classList.add('flash')}
 function guideActions(t,m,C){
   const sec=SECTION_NAME[t.jump]||'detail', d=m&&m.id?drillDef(m.id,C):null;
@@ -457,6 +497,51 @@ function guideActions(t,m,C){
     el('button',{type:'button',class:'gbtn primary',onclick:()=>goTo(t.jump)},el('span',{},`Go to ${sec}`),el('span',{class:'arr','aria-hidden':'true'},'↓')),
     d?el('button',{type:'button',class:'gbtn',onclick:()=>{drill=m.id;drillSort=null;drillQ='';render();setTimeout(()=>goTo('scorecard'),30)}},el('span',{},`Dig deeper: ${d.t.toLowerCase()}`),el('span',{class:'arr','aria-hidden':'true'},'→')):null,
     el('span',{class:'gsrc'},'Data: ',m.n||t.k,info(m.src||[])));
+}
+
+
+/* clients ranked by packets lost on the way to the AP */
+function topLossClients(S){const r=(S.clientRows||[]).filter(x=>x.upPackets&&x.upLossPct!=null).map(x=>({...x,lostN:x.upPackets*x.upLossPct/100}));
+  const t=r.reduce((a,x)=>a+x.lostN,0);return t?r.map(x=>({...x,share:100*x.lostN/t})).sort((a,b)=>b.lostN-a.lostN):[]}
+
+/* ---------- problematic clients: rows and a per-client diagnosis ---------- */
+const isSynthetic=r=>/synthetic client/i.test(r.name||'');
+function problemRows(C){
+  const roam=Object.fromEntries((get(C,'roaming.clients')||[]).map(c=>[c.mac,c]));
+  const base=C.clientRows?C.clientRows.map(r=>({...r,problems:(r.disconnects||0)+(r.dot1x||0)})):(C.events.topClients||[]).map(c=>({mac:c.client,name:c.client,problems:c.events}));
+  return base.filter(r=>r.problems>0).map(r=>({...r,roam:roam[r.mac]})).sort((a,b)=>b.problems-a.problems);
+}
+function diagnose(r,C){
+  if(isSynthetic(r))return{sev:'same',cause:'Meraki’s synthetic test client, run by the AP to test the network. Not a user device.',actions:['Nothing to fix: its disconnects are part of Meraki’s own testing. Leave it out when judging the network.']};
+  const d=days(C),perDay=(r.disconnects||0)/d,ro=r.roam,acts=[];let cause=null,sev='warn';
+  const attempts=(r.success||0)+(r.failures||0),authShare=attempts?(r.auth||0)/attempts:0;
+  if(r.dot1x>0){cause=cause||'802.1X logins are failing for this device.';sev='bad';acts.push('Check the RADIUS/ISE logs for this MAC to see the reject reason.','Renew or reinstall the device’s certificate or credentials.')}
+  if((r.auth||0)>=10&&authShare>=.1){cause=cause||`Fails to log in: ${nf(100*authShare,0)}% of its join attempts fail at authentication.`;sev='bad';acts.push('Forget the Wi-Fi network on the device and re-enter the password (PSK SSIDs).','If it uses 802.1X, check its username, password or certificate.')}
+  if(ro&&ro.roams>=10&&(ro.bad+ro.sub)/ro.roams>=.25){cause=cause||`Roams badly: ${nf(100*(ro.bad+ro.sub)/ro.roams,0)}% of its roams are suboptimal or bad.`;if(ro.bad>=10)sev='bad';
+    acts.push('Open its roam timeline to see which APs it moves between and where it lands on weak signal.','Raise the minimum bitrate on those APs so it leaves a weak AP sooner.','Turn on 802.11r (fast roaming) on its SSID if the device supports it.')}
+  if(ro&&ro.pingPong>=3){cause=cause||`Bounces between two APs (${ro.pingPong} ping-pong roams).`;acts.push('Reduce the overlap between those two APs: lower one AP’s power, or raise the minimum bitrate.')}
+  if(ro&&ro.sticky){cause=cause||'Holds on to a weak AP when a better one is in range (sticky).';acts.push('Raise the minimum bitrate on the AP it sticks to.','Update the device’s Wi-Fi driver; some devices are sticky by design.')}
+  if(r.upLossPct!=null&&r.upLossPct>=5){cause=cause||`Weak signal from the device: ${nf(r.upLossPct,1)}% of its packets to the AP are lost.`;acts.push('Move the device closer to an AP, or check it isn’t stuck on 2.4 GHz.','Update the device’s Wi-Fi driver.')}
+  if(perDay>=50){cause=cause||`Drops off the network about ${nf(perDay,0)} times a day.`;acts.push('Check the device’s power saving and sleep settings; aggressive power saving causes constant reconnects.','Update its Wi-Fi driver or firmware.','If it’s a laptop on a dock, check it isn’t switching between wired and Wi-Fi all day.')}
+  if(!cause){cause='Disconnects at a normal level for its activity.';sev='same';acts.push('No action needed unless the user reports problems.')}
+  return{sev,cause,actions:[...new Set(acts)].slice(0,4)};
+}
+
+function issueActions(C){
+  const c=C.connections.all||{},out=[];
+  const st=[['assoc',c.assoc],['auth',c.auth],['dhcp',c.dhcp],['dns',c.dns]].sort((a,b)=>b[1]-a[1])[0];
+  if(c.failures&&st&&st[1]){const k=st[0];out.push(({
+    assoc:'Association failures lead: clients are rejected or can\u2019t complete joining the radio. Check client balancing, the minimum bitrate (too high locks out distant clients) and whether failures cluster on one AP.',
+    auth:'Authentication failures lead: look at the Problematic clients list for devices with old passwords or certificates, and check the RADIUS logs.',
+    dhcp:'DHCP failures lead: check the DHCP scope on the client VLANs has free addresses and the server is reachable from the APs.',
+    dns:'DNS failures lead: check the DNS servers handed out by DHCP answer from the client VLANs.'})[k])}
+  const ap=Object.entries(C.events.byAp||{}).map(([a,x])=>[a,['disassociation','wpa_deauth','8021x_deauth','8021x_eap_failure','8021x_radius_timeout','8021x_client_timeout'].reduce((t,k)=>t+(x[k]||0),0)]).sort((a,b)=>b[1]-a[1]);
+  const tot=ap.reduce((t,x)=>t+x[1],0);
+  if(ap.length>1&&tot&&ap[0][1]/tot>=.4){const rows=problemRows(C).filter(r=>r.ap===ap[0][0]&&!isSynthetic(r));
+    out.push(`${ap[0][0]} logs ${nf(100*ap[0][1]/tot,0)}% of events. `+(rows.length?`Most come from ${rows.slice(0,2).map(r=>r.name||r.mac).join(' and ')} on that AP: fix those devices first. If the events stay high, check that AP\u2019s placement and coverage edge.`:'Check that AP\u2019s placement, power and coverage edge.'))}
+  const fr=C.events.counts||{};if((fr['11r_fast_roam']||0)===0&&(C.roaming&&C.roaming.totals&&C.roaming.totals.roams>50))out.push('No 802.11r fast roams were seen although clients roam often. Turning on 802.11r on 802.1X SSIDs shortens roams, if your clients support it.');
+  if(!out.length)out.push('Nothing stands out: failed joins and disconnects are spread thinly.');
+  return out;
 }
 
 /* ---------- section callouts ---------- */
@@ -588,6 +673,7 @@ function drillDef(id,S){
      rows:(get(S,'neighbors.top')||[]),cols:[{k:'ssid',l:'SSID'},{k:'bssid',l:'BSSID',f:v=>el('span',{class:'mono small'},v||'—')},{k:'rssi',l:'Strongest',num:1,f:dbF},{k:'heardBy',l:'Heard best by',f:v=>apName(S,v)},{k:'aps',l:'Your APs hearing it',num:1}],src:'airMarshal',
      empty:get(S,'neighbors.top')?'No neighbouring networks were heard.':'This snapshot was taken before the neighbour list was added.'},
    roamGood:roamDrill(S,'Clients and their roams','Every client that roamed, with how its roams went. Click a client to see its roam timeline.','roams'),
+   roamSub:roamDrill(S,'Clients with suboptimal roams','Clients whose roams were slow, landed on a weaker signal, or left them off the network for a while.','sub'),
    roamBad:roamDrill(S,'Clients with bad roams','Clients whose roams took over 3 seconds or landed on a much weaker signal.','bad'),
    roamMs:roamDrill(S,'Roam time per client','Average time each client took to move between APs.','avgMs'),
    pingpong:roamDrill(S,'Clients bouncing between APs','Roams back to the AP the client had just left, within 2 minutes.','pingPong'),
@@ -739,7 +825,9 @@ function render(){
         el('button',{type:'button',onclick:exportData,title:'Download just this snapshot\u2019s data (.json): small, and loadable into a later report to compare'},'Data'),
         el('button',{type:'button',onclick:exportPdf,title:'Open the print dialog; choose Save as PDF'},'PDF')),
       loadErr?el('span',{class:'err'},loadErr):null),
-    seg));
+    seg),
+    el('nav',{class:'secnav','aria-label':'Sections'},[['overview','Overview'],['scorecard','Scorecard'],['problem-clients','Problematic clients'],['roaming','Roaming'],['client-bands','Where clients connect'],['band','By band'],['radios','Radio utilization'],['rf-config','RF configuration'],['sources','Sources']]
+      .map(([id,l])=>el('a',{href:'#'+id,onclick:e=>{e.preventDefault();if(id==='sources')document.getElementById('sources').open=true;goTo(id)}},l))));
 
   /* header */
   app.append(el('header',{},
@@ -779,11 +867,25 @@ function render(){
    tiles.append(mkTile('airrm','AI-RRM',on==null?'—':on?'✅ On':'❌ Off',el('div',{class:'s'},sub),
      P&&pon!=null&&on!=null?el('div',{class:'tchg'},el('span',{class:'chip '+(on===pon?'same':on?'good':'bad')},on===pon?'No change':on?'Turned on':'Turned off'),isCross(C,P)?el('span',{class:'muted small'},` ${P.network}: ${pon?'on':'off'}`):null):null,
      on===false?' alertt':nOv?' warnt':''))}
+  {const nb=C.neighbors||{},am=C.airMarshal||{},has=nb.containedCount!=null,pol=am.settings&&am.settings.defaultPolicy;
+   const pnb=P&&P.neighbors&&P.neighbors.containedCount!=null?P.neighbors:null;
+   const sub=has?[`${nf(nb.rogueCount,0)} rogue on your LAN`,`${nf(nb.spoofCount,0)} spoofing your SSIDs`,`${nf(nb.strongBssids,0)} strong neighbours`,pol?`clients joining rogues: ${pol==='block'?'blocked':'allowed'}`:null].filter(Boolean).join(' · '):'Take a new snapshot to see contained, rogue and spoofed networks';
+   const ch=pnb&&!isCross(C,P)?['containedCount','rogueCount','spoofCount'].map(k=>[k,(nb[k]||0)-(pnb[k]||0)]).filter(x=>x[1]):null;
+   tiles.append(mkTile('airmarshal','Air Marshal',has?`${nf(nb.containedCount,0)} contained`:'—',el('div',{class:'s'},sub),
+     ch?el('div',{class:'tchg'},ch.length?ch.map(([k,d])=>el('span',{class:'chip '+(k==='containedCount'?'same':d>0?'bad':'good')},`${d>0?'+':'−'}${Math.abs(d)} ${{containedCount:'contained',rogueCount:'rogue',spoofCount:'spoof'}[k]}`)):el('span',{class:'chip same'},'No change')):null,
+     has&&(nb.rogueCount||nb.spoofCount)?' alertt':''))}
+  const pRows=problemRows(C),pReal=pRows.filter(r=>!isSynthetic(r)),pTot=(C.rates.disconnects||0)+(C.rates.dot1xFailures||0);
+  const pTop=pReal.slice(0,3).reduce((t,r)=>t+r.problems,0);
+  const pTile=el('button',{type:'button',class:'tile'+(pReal.some(r=>diagnose(r,C).sev==='bad')?' warnt':''),onclick:()=>goTo('problem-clients')},
+    el('div',{class:'k'},'Problematic clients'),el('div',{class:'v'},pRows.length?`${pReal.filter(r=>{const d=diagnose(r,C);return d.sev==='bad'||(d.sev!=='same'&&pTot&&r.problems/pTot>=.05)}).length} to check`:'None'),
+    el('div',{class:'s'},pRows.length?`${nf(C.rates.disconnectsPerClientDay,1)} disconnects per client a day · top 3 real devices cause ${pTot?nf(100*pTop/pTot,0):0}% of problem events`+(pRows.length>pReal.length?` · ${pRows.length-pReal.length} Meraki test client${pRows.length-pReal.length>1?'s':''} set aside`:''):'No disconnects or 802.1X failures'),
+    el('div',{class:'tlink'},'See who and what to do ↓'));
   for(const t of TILES){const m=tileMetric(t),a=m.v(C),b=P?m.v(P):null,tr=P?trend(m,b,a):null,out=showG&&outside(m,a);
     tiles.append(mkTile(t.id,t.k,fmtVal(m,a),el('div',{class:'s'},t.sub(C)),
       P?el('div',{class:'tchg'},tr?el('span',{class:'chip '+tr.cls},tr.cls==='same'?'No change':fmtDelta(m,b,a)):el('span',{class:'muted small'},'—'),el('span',{class:'muted small'},' vs '+fmtVal(m,b))):null,
       out?' outg':''));
     if(out)tiles.lastChild.append(el('div',{class:'gnote'},'Outside guideline '+m.tgt[1]))}
+  tiles.append(pTile);
   let guide=null;
   const closeBtn=t=>el('button',{type:'button',class:'x','aria-label':'Close',onclick:()=>{openTile=null;render()}},'×');
   if(openTile==='aps'){
@@ -835,48 +937,84 @@ function render(){
       el('ol',{},on===false?el('li',{},'Turn on AI-RRM in Dashboard: Wireless › Radio settings › AI-RRM. Check your licensing and firmware meet Meraki\u2019s requirements for it first.'):null,
         ov.length?el('li',{},'Review each fixed radio: remove the fixed values unless there\u2019s a deliberate reason for them (Wireless › Radio settings, per AP).'):null,
         el('li',{},'Take another snapshot a week or two after a change and compare: busiest radio, weakest client signal and roaming should improve.')))}
+  else if(openTile==='airmarshal'){
+    const nb=C.neighbors||{},am=C.airMarshal||{},st=am.settings,rules=am.rules;
+    const rows=[];
+    const add=(L,f)=>{for(const r of L||[]){const k=r.bssid||r.ssid;let x=rows.find(y=>(y.bssid||y.ssid)===k);if(!x){x={...r,flags:new Set()};rows.push(x)}x.flags.add(f)}};
+    add(nb.contained,'contained');add(nb.rogues,'rogue');add(nb.spoofs,'spoof');add(nb.open,'open');add(nb.top,'top');
+    for(const r of rows)if(r.contained)r.flags.add('contained');
+    rows.sort((a,b)=>(b.flags.has('contained')+b.flags.has('rogue')+b.flags.has('spoof'))-(a.flags.has('contained')+a.flags.has('rogue')+a.flags.has('spoof'))||(b.rssi||0)-(a.rssi||0));
+    const tag=r=>el('span',{class:'amtags'},[['contained','Contained','same'],['rogue','Rogue (on your LAN)','bad'],['spoof','Spoofing your SSID','bad'],['open','Open','warn']].filter(([k])=>r.flags.has(k)||(k==='open'&&(r.encryption==='Open'||r.encryption==='WEP'))).map(([k,l,c])=>el('span',{class:'chip '+c},k==='open'&&r.encryption==='WEP'?'WEP':l)));
+    const ago=ts=>ts?fds(new Date(ts*1000).toISOString()):'—';
+    const set=[['Clients joining rogue SSIDs',st?(st.defaultPolicy==='block'?'Blocked':st.defaultPolicy==='allow'?'Allowed':st.defaultPolicy||'—'):'—','The default policy for SSIDs Air Marshal classes as rogue. Block stops your clients connecting to them.'],
+      ['Scheduled scanning',st&&st.scan?(st.scan.enabled?'On':'Off'):'—','Optional dedicated scan schedule. Off is normal: APs still scan in the background.'],
+      ['Rules',rules?String(rules.length):'—','Allow, block and alert rules for named SSIDs, BSSIDs or wildcards.']];
+    const setT=el('table',{class:'dtable'},el('tbody',{},set.map(([a,b,c])=>el('tr',{},el('td',{},el('b',{},a)),el('td',{class:'num',style:'white-space:nowrap'},b),el('td',{class:'muted',style:'white-space:normal'},c)))));
+    const co=(nb.coChannel||[]).filter(r=>r.nets).slice(0,12);
+    const coT=co.length?el('table',{class:'dtable'},el('thead',{},el('tr',{},['AP','Radio','Channel','Networks heard on it','Strong (25 dB+)'].map((h,i)=>el('th',{class:i>2?'num':null,style:'padding:6px 8px'},h)))),
+      el('tbody',{},co.map(r=>el('tr',{},el('td',{},r.ap),el('td',{},band(r.band)),el('td',{},`ch ${r.channel}${r.width?' · '+r.width:''}`),el('td',{class:'num'},nf(r.nets,0)),el('td',{class:'num'},r.strong?el('b',{},nf(r.strong,0)):'0'))))):null;
+    const bc=(nb.byChannel||[]).slice(0,10),mx=Math.max(1,...bc.map(b=>b.nets));
+    const bars=bc.length?el('div',{class:'ambars'},bc.map(b=>el('div',{class:'ambar'},el('span',{class:'l'},`ch ${b.channel}`,el('span',{class:'muted small'},b.band?` ${b.band}`:'')),
+      el('span',{class:'t'},el('span',{class:'f',style:`width:${100*b.nets/mx}%`})),el('span',{class:'n'},nf(b.nets,0)+(b.strong?` · ${b.strong} strong`:''))))):null;
+    const enc=nb.encryption||{};
+    guide=el('div',{class:'guide'},el('div',{class:'guide-h'},el('b',{},'Air Marshal',info(['airMarshal','airMarshalSettings'],'Neighbours are from the last 7 days of the snapshot. Strong = heard by one of your APs at 25 dB or more.')),closeBtn()),
+      nb.containedCount==null?el('p',{class:'muted'},'This snapshot was taken before Air Marshal detail was added. Take a new snapshot to see contained, rogue and spoofed networks.'):
+      el('div',{},
+        el('p',{},`Your APs heard ${nf(nb.ssids,0)} other networks (${nf(nb.bssids,0)} access points) in the last 7 days; ${nf(nb.strongBssids,0)} were strong. `+
+          `${nf(nb.containedCount,0)} ${nb.containedCount===1?'is':'are'} contained, ${nf(nb.rogueCount,0)} ${nb.rogueCount===1?'was':'were'} seen on your wired LAN (rogue) and ${nf(nb.spoofCount,0)} broadcast one of your SSID names. `+
+          `${nf(nb.openCount,0)} ${nb.openCount===1?'is':'are'} open or WEP${enc.WPA?`; ${nf(enc.WPA,0)} use WPA`:''}. ${nf(nb.newSsids,0)} were first heard this week: most are phones, cars and smart devices passing by.`),
+        setT,
+        el('h3',{style:'margin-top:8px'},'Networks to know about'),
+        el('p',{class:'muted small'},'Contained, rogue, spoofing and open networks, plus the 40 strongest neighbours. The strongest is the best signal any of your APs heard.'),
+        miniTable({id:'am-list',rows,search:'Find by SSID, BSSID or maker…',
+          chips:[['all','All',()=>true],['contained','Contained',r=>r.flags.has('contained')],['rogue','Rogue',r=>r.flags.has('rogue')],['spoof','Spoofing',r=>r.flags.has('spoof')],['open','Open / WEP',r=>r.flags.has('open')],['strong','Strong',r=>(r.rssi||0)>=25]],
+          cols:[{l:'SSID',f:r=>el('span',{},el('b',{},r.ssid),tag(r))},{l:'BSSID',f:r=>el('span',{class:'mono small'},r.bssid||'—')},{l:'Strongest',num:1,f:r=>r.rssi==null?'—':r.rssi+' dB'},
+            {l:'Heard best by',f:r=>apName(C,r.heardBy)},{l:'APs',num:1,f:r=>nf(r.aps,0)},{l:'Channels',f:r=>(r.channels||[]).join(', ')||'—'},{l:'Security',f:r=>r.encryption||'—'},{l:'Maker',f:r=>r.manufacturer||'—'},{l:'Last heard',f:r=>ago(r.lastSeen)}],
+          text:r=>[r.ssid,r.bssid,r.manufacturer,(r.channels||[]).join(' ')].join(' ')}),
+        coT?el('h3',{style:'margin-top:10px'},'Your radios sharing a channel with neighbours'):null,
+        coT?el('p',{class:'muted small'},'Neighbours whose channel falls inside each radio’s channel (all of its width), heard by that AP. Strong ones compete for the same airtime. Air Marshal gives a channel but not a band, so 6 GHz neighbours are a best guess.'):null,coT,
+        bars?el('h3',{style:'margin-top:10px'},'Busiest neighbour channels'):null,bars,
+        rules&&rules.length?el('div',{},el('h3',{style:'margin-top:10px'},'Air Marshal rules'),el('ul',{},rules.map(r=>el('li',{},el('b',{},(r.type||'').toUpperCase()),` ${r.matchType||''}: `,el('span',{class:'mono small'},r.match||'—'))))):null),
+      el('ol',{},
+        el('li',{},'Rogue (seen on your LAN): an unknown AP is plugged into your wired network. Find it from the wired MAC or VLAN and remove it, or allow it with a rule if it’s yours.'),
+        el('li',{},'Spoofing your SSID: someone is broadcasting one of your network names, a common way to steal logins. Check where it’s heard and consider containment.'),
+        el('li',{},'Contained: Air Marshal is actively blocking clients from that network. Check each one is deliberate: containing a neighbour’s network can be illegal.'),
+        el('li',{},'Strong neighbours on your channels: leave AI-RRM to move radios, or narrow the channel width on the radios listed above.'),
+        st&&st.defaultPolicy==='allow'?el('li',{},'Clients are allowed to join rogue SSIDs. Consider Block in Dashboard: Wireless › Air Marshal.'):null))}
   else if(openTile){const t=TILES.find(x=>x.id===openTile),r=review(t.id,C),m=tileMetric(t);
     guide=el('div',{class:'guide',role:'region','aria-label':'Review guide for '+t.k},
       el('div',{class:'guide-h'},el('b',{},'Review guide: '+t.k),closeBtn()),
       el('p',{},r.what),
       el('ol',{},r.steps.filter(Boolean).map(x=>el('li',{},x))),
       guideActions(t,m,C))}
+  /* needs attention: the exceptions first, each one fact-based and one click from its detail */
+  const att=[];
+  {const openT=id=>()=>{openTile=id;render();setTimeout(()=>goTo('overview'),30)};
+   const down=C.aps.filter(x=>x.status&&x.status!=='online');
+   if(down.length)att.push(['bad',`${down.length} of ${C.aps.length} APs ${down.length>1?'are':'is'} not online: ${down.slice(0,3).map(x=>`${x.name} (${x.status})`).join(', ')}${down.length>3?'…':''}.`,'Access points',openT('aps')]);
+   const r=radStat(C);
+   for(const x of r.list){if(x.state==='bad')att.push(['bad',`RADIUS for ${x.ss.name} timed out with no successful logins: clients on that SSID can’t authenticate.`,'RADIUS servers',openT('radius')]);
+     else if(x.state==='warn')att.push(['warn',`RADIUS for ${x.ss.name} timed out from ${x.apsTo} AP${x.apsTo>1?'s':''}, though logins also succeeded.`,'RADIUS servers',openT('radius')])}
+   const nb=C.neighbors||{};
+   if(nb.rogueCount)att.push(['bad',`${nb.rogueCount} rogue network${nb.rogueCount>1?'s were':' was'} seen on your wired LAN.`,'Air Marshal',openT('airmarshal')]);
+   if(nb.spoofCount)att.push(['bad',`${nb.spoofCount} network${nb.spoofCount>1?'s are':' is'} broadcasting one of your SSID names.`,'Air Marshal',openT('airmarshal')]);
+   const ar=C.autoRf;if(ar&&ar.ai&&ar.ai.enabled===false)att.push(['warn','AI-RRM is off, so Meraki’s AI channel and power planning isn’t used.','AI-RRM',openT('airrm')]);
+   const nOv=(C.radioOverrides||[]).reduce((t,x)=>t+x.radios.length,0);if(nOv)att.push(['warn',`${nOv} radio${nOv>1?'s have':' has'} a manually fixed channel, power or width, outside AutoRF’s control.`,'AI-RRM',openT('airrm')]);
+   const pr=problemRows(C).filter(x=>!isSynthetic(x)),pT=(C.rates.disconnects||0)+(C.rates.dot1xFailures||0);
+   const chk=pr.filter(x=>{const d=diagnose(x,C);return d.sev==='bad'||(d.sev!=='same'&&pT&&x.problems/pT>=.05)});
+   if(chk.length)att.push(['warn',`${chk.length} client${chk.length>1?'s':''} to check, starting with ${chk[0].name||chk[0].mac}: ${diagnose(chk[0],C).cause.toLowerCase()}`,'Problematic clients',()=>goTo('problem-clients')]);
+   const rt=get(C,'roaming.totals');
+   if(rt&&(rt.pingPongClients||rt.stickyClients))att.push(['warn',[rt.pingPongClients?`${rt.pingPongClients} client${rt.pingPongClients>1?'s':''} ping-pong between APs`:null,rt.stickyClients?`${rt.stickyClients} sticky client${rt.stickyClients>1?'s':''}`:null].filter(Boolean).join(' and ')+'.','Roaming',()=>goTo('roaming')]);
+   if(P){const worse=M.filter(m=>!m.g&&!m.ctx).filter(m=>{const tr=trend(m,m.v(P),m.v(C));return tr&&tr.cls==='bad'});
+     if(worse.length)att.push(['warn',`${worse.length} metric${worse.length>1?'s':''} got worse than ${isCross(C,P)?P.network:'the baseline'}: ${worse.slice(0,4).map(m=>m.n.toLowerCase()).join(', ')}${worse.length>4?'…':''}.`,'Scorecard',()=>goTo('scorecard')])}
+   att.sort((a,b)=>(a[0]==='bad'?0:1)-(b[0]==='bad'?0:1))}
+  const attBox=el('div',{class:'attn'+(att.length?'':' clear')},
+    el('div',{class:'attn-h'},el('b',{},att.length?`${att.length} thing${att.length>1?'s':''} to look at`:'Nothing needs attention'),
+      el('span',{class:'muted small'},att.length?' Facts from this snapshot, most serious first. Healthy items are left out.':' All APs online, RADIUS reachable, no rogue or spoofed networks, AI-RRM on, and no client stands out.')),
+    att.length?el('ul',{},att.map(([sev,txt,lab,go])=>el('li',{},el('span',{class:'dot '+sev}),el('span',{class:'attn-t'},txt),el('button',{type:'button',class:'gbtn sm',onclick:go},lab+' →')))):null);
   app.append(el('section',{id:'overview'},el('div',{class:'sec-head'},el('h2',{},'Overview'),
       el('p',{class:'muted small'},P?(isCross(C,P)?`Each tile shows ${C.network} against ${P.network}. Green better, red worse, grey about the same. Click a tile for details and what to review.`:'Each tile shows this snapshot and its change from the baseline. Green improved, red got worse, grey no change. Click a tile for details and what to review.'):'The key numbers for this snapshot. Click a tile for details and what to review.')),
-    tiles,guide));
-
-  /* clients causing the most problems: right under the overview, so the cause sits next to the symptoms */
-  {const totP=(C.rates.disconnects||0)+(C.rates.dot1xFailures||0);
-   const rows0=C.clientRows?C.clientRows.map(r=>({...r,problems:(r.disconnects||0)+(r.dot1x||0)})):(C.events.topClients||[]).map(c=>({mac:c.client,name:c.client,problems:c.events}));
-   const roam=Object.fromEntries((get(C,'roaming.clients')||[]).map(c=>[c.mac,c]));
-   const rows=rows0.filter(r=>r.problems>0).sort((a,b)=>b.problems-a.problems);
-   const shown=rows.slice(0,showAllProblem?25:5);
-   const top3=rows.slice(0,3).reduce((t,r)=>t+r.problems,0);
-   const hasLogs=mac=>!!get(C,['roaming','logs',mac]);
-   const body=el('tbody',{},shown.map((r,i)=>{const ro=roam[r.mac];
-     return el('tr',{},
-       el('td',{},el('b',{},r.name||r.mac),el('div',{class:'muted small'},[r.name&&r.name!==r.mac?r.mac:null,r.manufacturer,r.os].filter(Boolean).join(' · '))),
-       el('td',{},r.ap||'—'),
-       el('td',{class:'num'},el('b',{},nf(r.problems,0)),el('div',{class:'muted small'},totP?nf(100*r.problems/totP,0)+'% of all':'')),
-       el('td',{class:'num'},r.disconnects!=null?nf(r.disconnects/days(C),0):'—'),
-       el('td',{class:'num'},r.dot1x!=null?nf(r.dot1x,0):'—'),
-       el('td',{class:'num'},r.auth!=null?nf(r.auth,0):'—'),
-       el('td',{class:'num'},ro?el('span',{},ro.bad?el('span',{class:'qb bad'},ro.bad+' bad'):null,ro.sub?el('span',{class:'qb sub'},ro.sub+' sub'):null,!ro.bad&&!ro.sub?el('span',{class:'muted'},`${ro.roams} good`):null):el('span',{class:'muted'},'—')),
-       el('td',{class:'num'},r.upLossPct!=null?nf(r.upLossPct,1)+'%':'—'),
-       el('td',{},hasLogs(r.mac)?el('button',{type:'button',class:'gbtn sm',onclick:()=>showRoamClient(r.mac)},'Roams →'):null))}));
-   const lines=[];
-   if(rows.length&&totP)lines.push(`The top 3 clients cause ${nf(100*top3/totP,0)}% of all disconnect and 802.1X events. When a few devices dominate like this, start with those devices (driver, power saving, location) before changing the network.`);
-   if(rows[0]&&rows[0].ap)lines.push(`${rows[0].name||rows[0].mac} is the worst, last seen on ${rows[0].ap}.`);
-   if(rows.slice(0,shown.length).some(r=>/synthetic client/i.test(r.name||'')))lines.push('“(synthetic client)” entries are Meraki\u2019s own test clients, run by the APs to check the network; they aren\u2019t user devices. Their disconnects are part of the test, so they can be set aside.');
-   lines.push('Names with a long code or a private (randomised) MAC are phones and laptops hiding their real address; one device can appear more than once.');
-   app.append(el('section',{id:'problem-clients'},
-     el('div',{class:'sec-head'},el('div',{class:'sec-row'},el('h2',{},'Clients causing the most problems'),
-        rows.length>5?el('button',{type:'button',onclick:()=>{showAllProblem=!showAllProblem;render();goTo('problem-clients')}},showAllProblem?'Show top 5':`Show top ${Math.min(25,rows.length)}`):null),
-       el('p',{class:'muted small'},'Ranked by problem events (disconnects plus 802.1X failures) in this period, with everything else known about each client. Full lists sit behind each scorecard row.')),
-     rows.length?el('div',{class:'card'},callout(lines),el('div',{class:'tbl-wrap',style:'margin-top:10px'},el('table',{class:'ptable'},
-       el('thead',{},el('tr',{},[['Client'],['Last AP'],['Problem events',1],['Disconnects / day',1],['802.1X failures',1],['Auth failures',1],['Roaming',1],['Upstream loss',1],['']].map(([h,n])=>el('th',{class:n?'num':null},h)),
-         )),body))):el('div',{class:'callout'},el('p',{},'No client logged any disconnects or 802.1X failures in this period.'))));
-  }
+    attBox,tiles,guide));
 
   /* scorecard */
   const tb=el('tbody');
@@ -909,6 +1047,44 @@ function render(){
       drill?resizer():null,
       drill?drillPanel(C,P,byId[drill]):null)));
 
+  /* problematic clients: who causes the problems, then where they happen */
+  let pcSec=null;
+  {const totP=(C.rates.disconnects||0)+(C.rates.dot1xFailures||0);
+   const rows=problemRows(C);
+   const shown=rows.slice(0,showAllProblem?25:5);
+   const top3=rows.slice(0,3).reduce((t,r)=>t+r.problems,0);
+   const hasLogs=mac=>!!get(C,['roaming','logs',mac]);
+   const body=el('tbody',{},shown.map(r=>{const dx=diagnose(r,C);
+     const sig=[r.disconnects!=null?`${nf(r.disconnects/days(C),0)} disconnects/day`:null,
+       r.roam&&(r.roam.bad||r.roam.sub)?`${r.roam.bad} bad, ${r.roam.sub} suboptimal of ${r.roam.roams} roams`:null,
+       r.roam&&r.roam.pingPong?`${r.roam.pingPong} ping-pong`:null,r.roam&&r.roam.sticky?`sticky`:null,
+       r.auth?`${nf(r.auth,0)} auth failures`:null,r.dot1x?`${nf(r.dot1x,0)} 802.1X failures`:null,
+       r.upLossPct!=null&&r.upLossPct>=2?`${nf(r.upLossPct,1)}% upstream loss`:null].filter(Boolean);
+     return el('tr',{class:'pc-'+dx.sev},
+       el('td',{},el('div',{class:'pc-name'},el('span',{class:'dot '+(dx.sev==='bad'?'bad':dx.sev==='warn'?'warn':'same')}),el('b',{},r.name||r.mac)),
+         el('div',{class:'muted small'},[r.name&&r.name!==r.mac?r.mac:null,r.manufacturer,r.os].filter(Boolean).join(' · ')),
+         el('div',{class:'muted small'},'Last AP: '+(r.ap||'—'))),
+       el('td',{class:'num'},el('b',{},nf(r.problems,0)),el('div',{class:'muted small'},totP?nf(100*r.problems/totP,0)+'% of all':'')),
+       el('td',{},el('div',{class:'pc-cause'},dx.cause),el('div',{class:'pc-sig'},sig.map(x=>el('span',{class:'qb'},x)))),
+       el('td',{class:'pc-do'},el('ol',{},dx.actions.map(x=>el('li',{},x))),
+         el('div',{class:'pc-btns'},hasLogs(r.mac)?el('button',{type:'button',class:'gbtn sm',onclick:()=>showRoamClient(r.mac)},'Roam timeline →'):null,
+           el('span',{class:'muted small'},'Dashboard: Network-wide › Clients, search ',el('span',{class:'mono'},r.mac)))))}));
+   const real=rows.filter(r=>!isSynthetic(r)),synth=rows.filter(isSynthetic);
+   const lines=[];
+   if(rows.length&&totP)lines.push(`The top 3 clients cause ${nf(100*top3/totP,0)}% of all disconnect and 802.1X events. When a few devices dominate like this, fixing those devices helps more than changing the network.`);
+   if(synth.length)lines.push(`${synth.length} client${synth.length>1?'s':''} in this list ${synth.length>1?'are':'is'} Meraki’s synthetic test client${synth.length>1?'s':''}, run by the APs themselves. Set ${synth.length>1?'them':'it'} aside.`);
+   if(real[0])lines.push(`The real device to start with is ${real[0].name||real[0].mac}: ${diagnose(real[0],C).cause.toLowerCase()}`);
+   pcSec=el('section',{id:'problem-clients'},
+     el('div',{class:'sec-head'},el('div',{class:'sec-row'},el('h2',{},'Problematic clients'),
+        rows.length>5?el('button',{type:'button',onclick:()=>{showAllProblem=!showAllProblem;render();goTo('problem-clients')}},showAllProblem?'Show top 5':`Show top ${Math.min(25,rows.length)}`):null),
+       el('p',{class:'muted small'},'Who is behind most disconnects and 802.1X failures and what to do about each, then where in the network and in the join those failures happen.')),
+     rows.length?el('div',{class:'card'},callout(lines),el('div',{class:'tbl-wrap',style:'margin-top:10px'},el('table',{class:'ptable'},
+       el('thead',{},el('tr',{},[['Client'],['Problem events',1],['What’s happening'],['What to do']].map(([h,n])=>el('th',{class:n?'num':null},h)))),body)),
+       el('p',{class:'muted small',style:'margin-top:8px'},'Causes are worked out from each client’s numbers in this snapshot, so treat them as the most likely explanation to check first, not a certainty.')):
+       el('div',{class:'callout'},el('p',{},'No client logged any disconnects or 802.1X failures in this period.')));
+   app.append(pcSec);
+  }
+
   /* RF configuration */
   const chg=P&&!isCross(C,P)?new Set(rfChanges(C,P)):new Set();
   const rtb=el('tbody');
@@ -923,7 +1099,7 @@ function render(){
   const nb=S=>S.neighbors?`${nf(S.neighbors.bssids,0)} heard, ${nf(S.neighbors.strongBssids,0)} strong (25 dB or more)`:'—';
   const ctb=el('tbody',{},[['RF profile',prof,'rfProfiles'],['AutoRF',rrm,'rrm'],['Neighbouring networks',nb,'airMarshal']].map(([n,f,src])=>
     el('tr',{class:P&&!isCross(C,P)&&src!=='airMarshal'&&f(P)!==f(C)?'chg-row':null},el('td',{},el('span',{class:'mname'},n,info(src))),P?el('td',{class:'muted'},f(P)):null,el('td',{},f(C)))));
-  app.append(el('section',{},el('div',{class:'sec-head'},el('h2',{},'RF configuration'),el('p',{class:'muted small'},'Channel, width and power of every radio, read when the snapshot was taken.')),
+  app.append(el('section',{id:'rf-config'},el('div',{class:'sec-head'},el('h2',{},'RF configuration'),el('p',{class:'muted small'},'Channel, width and power of every radio, read when the snapshot was taken.')),
     callout(calloutRF(C,P)),
     el('div',{class:'card'},el('h3',{},'Radios',info(['status','radioSettings'],'Radio order (wifi0, 1, 2) follows the order Meraki lists each radio’s BSSIDs.')),
       el('div',{class:'tbl-wrap',style:'margin-top:8px'},el('table',{},el('thead',{},el('tr',{},el('th',{},'AP'),el('th',{},'Band'),P&&!isCross(C,P)?el('th',{},'Baseline'):null,el('th',{},P&&!isCross(C,P)?'This snapshot':'Setting'),el('th',{},'SSIDs broadcast'))),rtb))),
@@ -966,6 +1142,72 @@ function render(){
     el('div',{class:'card'},el('h3',{},'Per radio',info('radioUtil','Meraki keeps this 10-minute data for 14 days, so each snapshot covers at most the last 14 days.')),
       el('div',{class:'legend',style:'margin:8px 0'},P&&!isCross(C,P)?el('span',{style:'--c:var(--base)'},`Baseline (${win(P)})`):null,el('span',{style:'--c:var(--accent)'},P&&!isCross(C,P)?`This snapshot (${win(C)})`:`${win(C)}`),el('span',{class:'nolegend'},`Trend lines cover the whole ${C.window.days}-day period, one point per hour (busy hours show as spikes).`)),
       el('div',{class:'tbl-wrap'},el('table',{},el('thead',{},el('tr',{},el('th',{},'Radio'),el('th',{class:'num'},'Average'),el('th',{class:'num'},'Peak (p95)'),el('th',{class:'num'},'Max'),el('th',{class:'num'},'Non-Wi-Fi at peak'),el('th',{},`Trend over ${C.window.days} days`))),utb)))));
+
+  /* where clients connect: band buttons, SSID and radio drop-downs, radios and clients */
+  {const CC=C.clientConns,SN=C.ssidNames||{};
+   const sec=el('section',{id:'client-bands'},el('div',{class:'sec-head'},el('h2',{},'Where clients connect'),
+     el('p',{class:'muted small'},'Which bands, radios and SSIDs clients join, counted from every successful connection in this period. Pick a band, SSID or radio to narrow everything below.')));
+   if(!CC){sec.append(el('div',{class:'callout'},el('p',{},'This snapshot was taken before connection detail was added. Take a new snapshot to see it.')));app.append(sec)}
+   else{
+    const ssidName=n=>SN[String(n)]||(n==null?'—':'SSID '+n);
+    const radioKey=r=>`${r.serial}|${r.band}|${r.ch}`, radioLabel=r=>`${r.ap} · ${band(r.band)} · ch ${r.ch??'—'}`;
+    const inS=r=>cbSsid==='all'||String(r.ssid)===cbSsid, inB=r=>cbBand==='all'||r.band===cbBand, inR=r=>cbRadio==='all'||radioKey(r)===cbRadio;
+    const base=CC.filter(inS);
+    const uniq=a=>new Set(a.map(r=>r.mac)).size;
+    /* band buttons with client counts for the chosen SSID */
+    const bands=['2.4','5','6'],allClients=uniq(base);
+    const btns=el('div',{class:'qchips bandbtns',role:'group','aria-label':'Band'},[['all','All bands']].concat(bands.map(b=>[b,band(b)])).map(([k,l])=>{
+      const rows=k==='all'?base:base.filter(r=>r.band===k),n=uniq(rows),conns=rows.reduce((t,r)=>t+r.n,0);
+      return el('button',{type:'button',class:'qchip bandbtn','aria-pressed':String(cbBand===k),disabled:n||k==='all'?null:'',onclick:()=>{cbBand=k;cbRadio='all';render();goTo('client-bands')}},
+        el('span',{class:'bb-l'},l),el('span',{class:'bb-n'},`${n} client${n===1?'':'s'}`),el('span',{class:'bb-s'},k==='all'?`${nf(conns,0)} connections`:`${allClients?nf(100*n/allClients,0):0}% of clients · ${nf(conns,0)} connections`))}));
+    /* drop-downs */
+    const ssids=[...new Set(CC.map(r=>String(r.ssid)))].sort((a,b)=>ssidName(a).localeCompare(ssidName(b)));
+    const selS=el('select',{'aria-label':'SSID',onchange:e=>{cbSsid=e.target.value;cbRadio='all';render();goTo('client-bands')}},el('option',{value:'all',selected:cbSsid==='all'?'':null},'All SSIDs'),
+      ssids.map(n=>el('option',{value:n,selected:cbSsid===n?'':null},`${ssidName(n)} (${uniq(CC.filter(r=>String(r.ssid)===n))} clients)`)));
+    const radios=Object.values(base.filter(inB).reduce((m,r)=>{const k=radioKey(r);(m[k]=m[k]||{key:k,label:radioLabel(r),ap:r.ap,band:r.band,ch:r.ch,rows:[]}).rows.push(r);return m},{}))
+      .map(x=>({...x,clients:uniq(x.rows),conns:x.rows.reduce((t,r)=>t+r.n,0)})).sort((a,b)=>b.conns-a.conns);
+    if(cbRadio!=='all'&&!radios.some(x=>x.key===cbRadio))cbRadio='all';
+    const selR=el('select',{'aria-label':'Radio',onchange:e=>{cbRadio=e.target.value;render();goTo('client-bands')}},el('option',{value:'all',selected:cbRadio==='all'?'':null},'All radios'),
+      radios.map(x=>el('option',{value:x.key,selected:cbRadio===x.key?'':null},`${x.label} (${x.clients} clients)`)));
+    const reset=cbBand!=='all'||cbSsid!=='all'||cbRadio!=='all'?el('button',{type:'button',onclick:()=>{cbBand='all';cbSsid='all';cbRadio='all';render();goTo('client-bands')}},'Clear filters'):null;
+    /* callout */
+    const perClient={};for(const r of base){(perClient[r.mac]=perClient[r.mac]||new Set()).add(r.band)}
+    const only24=Object.values(perClient).filter(b=>b.size===1&&b.has('2.4')).length,on6=Object.values(perClient).filter(b=>b.has('6')).length,n=Object.keys(perClient).length;
+    const lines=[];
+    if(n){lines.push(`${n} client${n>1?'s':''} connected${cbSsid==='all'?'':' to '+ssidName(cbSsid)}: ${bands.map(b=>{const k=uniq(base.filter(r=>r.band===b));return `${k} on ${band(b)}`}).join(', ')} (a client that moves between bands is counted on each).`);
+      if(only24)lines.push(`${only24} client${only24>1?'s':''} only ever used 2.4 GHz. These are usually IoT or older devices that can’t use 5 GHz; they share the network’s only 2.4 GHz airtime.`);
+      if(on6)lines.push(`${on6} client${on6>1?'s':''} used 6 GHz at least once, the cleanest band.`);
+      const top=radios[0];if(top)lines.push(`Busiest radio by connections${cbBand==='all'?'':' on '+band(cbBand)}: ${top.label}, with ${nf(top.conns,0)} connections from ${top.clients} clients.`)}
+    lines.push('Counted for the clients checked for roaming (up to the 300 busiest). A client that stays connected all period counts as one connection.');
+    /* radios table */
+    const maxC=Math.max(1,...radios.map(x=>x.conns));
+    const rtab=el('table',{class:'dtable rtab'},el('thead',{},el('tr',{},['Radio','Clients','Connections',''].map((h,i)=>el('th',{class:i&&i<3?'num':null,style:'padding:6px 8px'},h)))),
+      el('tbody',{},radios.map(x=>el('tr',{class:'rrow2'+(cbRadio===x.key?' rsel':''),tabindex:'0',role:'button','aria-label':'Show clients on '+x.label,
+        onclick:()=>{cbRadio=cbRadio===x.key?'all':x.key;render();goTo('client-bands')},onkeydown:e=>{if(e.key==='Enter'){cbRadio=cbRadio===x.key?'all':x.key;render();goTo('client-bands')}}},
+        el('td',{},el('b',{},x.ap),el('div',{class:'muted small'},`${band(x.band)} · channel ${x.ch??'—'}`)),el('td',{class:'num'},nf(x.clients,0)),el('td',{class:'num'},nf(x.conns,0)),
+        el('td',{style:'width:40%'},el('div',{class:'cbar'},el('span',{style:`width:${100*x.conns/maxC}%;background:var(--b${x.band.replace('.','')},var(--accent))`})))))));
+    /* clients table */
+    const rows=base.filter(inB).filter(inR);
+    const byC=Object.values(rows.reduce((m,r)=>{const c=(m[r.mac]=m[r.mac]||{mac:r.mac,name:r.name,maker:r.maker,os:r.os,bands:new Set(),ssids:new Set(),radios:{},n:0,last:''});
+      c.bands.add(r.band);c.ssids.add(ssidName(r.ssid));c.radios[radioLabel(r)]=(c.radios[radioLabel(r)]||0)+r.n;c.n+=r.n;if((r.last||'')>c.last)c.last=r.last;return m},{}))
+      .filter(c=>!cbQ||JSON.stringify([c.name,c.mac,c.maker,c.os]).toLowerCase().includes(cbQ)).sort((a,b)=>b.n-a.n);
+    const ctb=el('tbody',{},byC.slice(0,200).map(c=>{const rs=Object.entries(c.radios).sort((a,b)=>b[1]-a[1]);
+      return el('tr',{},el('td',{},el('b',{},c.name),el('div',{class:'muted small'},[c.name!==c.mac?c.mac:null,c.maker,c.os].filter(Boolean).join(' · '))),
+        el('td',{},[...c.bands].sort().map(b=>el('span',{class:'qb band'+b.replace('.','')},band(b)))),
+        el('td',{class:'muted'},[...c.ssids].join(', ')),
+        el('td',{},rs.slice(0,3).map(([l,k])=>el('div',{class:'small'},`${l} `,el('span',{class:'muted'},`×${k}`))),rs.length>3?el('div',{class:'muted small'},`+${rs.length-3} more`):null),
+        el('td',{class:'num'},nf(c.n,0)),el('td',{class:'num muted'},c.last?new Date(c.last).toISOString().slice(5,16).replace('T',' '):'—'))}),
+      byC.length?null:el('tr',{},el('td',{colspan:'6',class:'muted'},'No clients match these filters.')));
+    const csearch=el('input',{type:'search',class:'dsearch',placeholder:'Find a client by name, MAC, maker or OS…','aria-label':'Find a client',value:cbQ,
+      oninput:e=>{cbQ=e.target.value.trim().toLowerCase();const pos=e.target.selectionStart;render();const i=document.querySelector('#client-bands .dsearch');if(i){i.focus();i.setSelectionRange(pos,pos)}}});
+    sec.append(btns,el('div',{class:'cbfilters'},el('label',{},'SSID',selS),el('label',{},'Radio',selR),reset),callout(lines),
+      el('div',{class:'grid cbgrid'},
+        el('div',{class:'card'},el('h3',{},cbBand==='all'?'Radios by connections':`${band(cbBand)} radios by connections`,info('roaming','From each client’s connectivity events: every successful connection, with the AP, band, channel and SSID.')),
+          el('p',{class:'muted small',style:'margin:4px 0 8px'},'Click a radio to list only its clients.'),el('div',{class:'tbl-wrap'},rtab)),
+        el('div',{class:'card'},el('div',{class:'sec-row'},el('h3',{},`Clients (${byC.length})`),csearch),
+          el('div',{class:'tbl-wrap dscroll',style:'max-height:460px;margin-top:8px'},el('table',{class:'dtable'},el('thead',{},el('tr',{},['Client','Bands','SSID','Radios (connections)','Connections','Last (UTC)'].map((h,i)=>el('th',{class:i>=4?'num':null,style:'padding:6px 8px;position:sticky;top:0;background:var(--panel)'},h)))),ctb)))));
+    app.append(sec);
+   }}
 
   /* roaming */
   {const RO=C.roaming,PR=P?P.roaming:null;
@@ -1080,13 +1322,18 @@ function render(){
   const probAp=(S,ap)=>{const x=(S.events.byAp||{})[ap]||{};return['disassociation','wpa_deauth','8021x_deauth','8021x_eap_failure','8021x_radius_timeout','8021x_client_timeout'].reduce((t,k)=>t+(x[k]||0),0)/days(S)};
   const apN=[...new Set([...Object.keys(C.events.byAp||{}),...(P?Object.keys(P.events.byAp||{}):[])])].filter(x=>x!=='unknown');
   const apRows=apN.map(ap=>[ap,P?probAp(P,ap):null,probAp(C,ap)]).sort((x,y)=>y[2]-x[2]);
-  app.append(el('section',{id:'issues'},el('div',{class:'sec-head'},el('h2',{},'Client issues'),el('p',{class:'muted small'},'Failed joins and disconnects, averaged per day so snapshots of different lengths compare fairly.')),
+  pcSec.append(el('div',{class:'subsec',id:'issues'},el('h3',{class:'subh'},'Where joins fail and disconnects happen',info(['connections','events'],'Averaged per day so snapshots of different lengths compare fairly.')),
     callout(calloutIssues(C,P)),
+    callout(issueActions(C),'What to do'),
     el('div',{class:'grid'},
       bars('Failed joins by stage, per day','connections',stg,v=>nf(v,0),'Where joins failed: radio association, PSK or 802.1X authentication, getting an IP address, or DNS.'),
       bars('Disconnect and 802.1X events, per day','events',evs,v=>nf(v,0),'From the wireless event log. Fast roams are shown for context; they are healthy.'),
-      bars('Problem events per AP, per day','events',apRows,v=>nf(v,0),'Disconnects plus 802.1X failures logged against each AP.')),
-    el('p',{class:'muted small'},'The clients behind these events are listed under ',el('a',{href:'#problem-clients',onclick:e=>{e.preventDefault();goTo('problem-clients')}},'Clients causing the most problems'),', near the top.')));
+      bars('Problem events per AP, per day','events',apRows,v=>nf(v,0),'Disconnects plus 802.1X failures logged against each AP.'))));
+
+  /* reading order: verdict and key numbers, then each stage of a client's experience
+     (connect, stay connected and roam, which band and radio), then the RF underneath */
+  const ORDER=['overview','scorecard','problem-clients','roaming','client-bands','band','radios','rf-config'];
+  for(const id of ORDER){const s=app.querySelector('#'+CSS.escape(id));if(s)app.append(s)}
 
   /* sources */
   const EP=DATA.endpoints||[];let area='';
@@ -1095,7 +1342,7 @@ function render(){
     el('tbody',{},EP.flatMap(e=>{const rows=[];if(e.area!==area){area=e.area;rows.push(el('tr',{class:'grp'},el('td',{colspan:'5'},area)))}
       rows.push(el('tr',{},el('td',{},el('code',{},e.path)),el('td',{},e.use),el('td',{},e.shows),el('td',{},e.lookback),el('td',{},e.calls)));return rows})))):
     (()=>{const l=el('div',{class:'src-list'});for(const[,[ep,lb]]of Object.entries(SRC))l.append(el('code',{},ep),el('span',{},lb));return l})();
-  app.append(el('details',{},el('summary',{},'Sources and method: every Meraki API endpoint used'),
+  app.append(el('details',{id:'sources'},el('summary',{},'Sources and method: every Meraki API endpoint used'),
     el('p',{class:'disclaimer-r'},el('b',{},'Read-only. '),'This tool only sends GET requests to the Meraki Dashboard API. It never sends POST, PUT, PATCH or DELETE requests, so it makes no changes to your Meraki environment. A read-only admin API key is all it needs.'),
     el('p',{style:'margin-top:8px'},`Every figure comes from read-only Meraki Dashboard API v1 calls made when the snapshot was taken (${C.apiCalls} calls, ${C.apiErrors} refused). Snapshots are saved as files, so this report stays valid after Meraki deletes the underlying data.`),
     el('p',{style:'margin-top:6px'},'“No change” means the difference is within normal day-to-day variation for that metric. Targets are rules of thumb, not Meraki thresholds.'),

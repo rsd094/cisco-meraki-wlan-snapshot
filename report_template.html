@@ -352,7 +352,7 @@ section,details{scroll-margin-top:52px}
 .tp-ico .tp-badge{position:absolute;right:-3px;bottom:-1px}
 .tp-badge{display:inline-flex;align-items:center;justify-content:center;width:15px;height:15px;border-radius:50%;font-size:10px;font-weight:700;color:#fff;background:var(--same);border:2px solid var(--panel);box-sizing:content-box}
 .tp-badge.ok{background:#3aa655}.tp-badge.warn{background:#c08a1e}.tp-badge.bad{background:var(--bad)}
-.tp-name{font-size:12px;font-weight:600;margin-top:6px;line-height:1.25;word-break:break-word}.tp-sub{font-size:11px;color:var(--muted);word-break:break-all}
+.tp-name{font-size:12px;font-weight:600;margin-top:6px;line-height:1.25;word-break:break-word}.tp-sub{font-size:11px;color:var(--muted);overflow-wrap:anywhere}
 .tp-link{position:relative;flex:1 1 70px;min-width:70px;max-width:130px;height:46px}
 .tp-line{position:absolute;left:4px;right:4px;top:22px;border-top:1.5px solid var(--muted)}
 .tp-link.air .tp-line,.tp-link.lan .tp-line,.tp-link.wan .tp-line{border-top-style:dashed}.tp-link.vpn .tp-line{border-top:2px dashed #1D9E75}
@@ -1612,7 +1612,7 @@ function render(){
     const ico={appliance:'router',switch:'switch',wireless:'ap',discovered:'disc'};
     const treeNode=(id,link,seen)=>{const n=nodeBy[id]||{name:'?',type:'?'};if(seen.has(id))return null;seen.add(id);
       const ch=(kids[id]||[]).slice().sort((a,b)=>((nodeBy[a.child]||{}).type==='wireless')-((nodeBy[b.child]||{}).type==='wireless')||String((nodeBy[a.child]||{}).name).localeCompare(String((nodeBy[b.child]||{}).name)));
-      const row=el('div',{class:'tn-row'},el('span',{class:'tn-ico '+(ico[n.type]||'disc')}),el('b',{},n.name),n.model?el('span',{class:'muted small'},' '+n.model):null,
+      const row=el('div',{class:'tn-row'},el('span',{class:'tn-ico '+(ico[n.type]||'disc')}),el('b',{},n.name),n.model?el('span',{class:'muted small'},' '+n.model):null,(n.ip||n.wanIp)?el('span',{class:'mono small'},n.ip||'WAN '+n.wanIp):null,
         link?el('span',{class:'tn-port'},`${portL(link.childPort)} → ${(nodeBy[link.parent]||{}).name||'?'}${link.parentPort?' '+portL(link.parentPort):''}`):el('span',{class:'tn-port'},'root'),
         !n.inNetwork?el('span',{class:'qb'},'not in this network'):null);
       const apKids=ch.filter(l=>(nodeBy[l.child]||{}).type==='wireless'),other=ch.filter(l=>(nodeBy[l.child]||{}).type!=='wireless');
@@ -1643,7 +1643,7 @@ function render(){
      const wired=P_.hops.filter(h=>!(login&&srv&&srv.route==='local'&&h.type==='appliance'));
      for(const h of wired){
       L.push({kind:'wire',a:h.type==='wireless'?pnum(prevOut):'',b:pnum(h.inPort),st:okSt(stOf(h.serial))==='bad'?'bad':'ok',tip:[h.inCfg&&h.inCfg.name].filter(Boolean).join(' · ')});
-      N.push({ic:h.type==='appliance'?'mx':h.type==='wireless'?'ap':h.type==='switch'?'switch':'disc',name:h.device,sub:h.model||'',st:okSt(stOf(h.serial)),tip:`${h.device} · in ${h.inPort||'?'}${h.outPort?' · out '+h.outPort:''}`});
+      N.push({ic:h.type==='appliance'?'mx':h.type==='wireless'?'ap':h.type==='switch'?'switch':'disc',name:h.device,sub:h.type==='appliance'?(h.wanIp?'WAN '+h.wanIp:h.model||''):(h.ip||h.model||''),st:okSt(stOf(h.serial)),tip:`${h.device}${h.model?' · '+h.model:''}${h.ip?' · '+h.ip:''}${h.wanIp?' · WAN '+h.wanIp:''} · in ${h.inPort||'?'}${h.outPort?' · out '+h.outPort:''}`});
       prevOut=h.outPort;
       if(h.outPort)N[N.length-1].out=pnum(h.outPort);
      }

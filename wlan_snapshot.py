@@ -429,7 +429,7 @@ def snapshot(m, args):
     tasks = {
         "bss": A("/organizations/%s/wireless/ssids/statuses/byDevice" % oid, dict(org_net, perPage=500)),
         "rfAssign": A("/organizations/%s/wireless/rfProfiles/assignments/byDevice" % oid, dict(org_net, perPage=1000)),
-        "statuses": lambda: m.get_all("/organizations/%s/devices/statuses" % oid, {"networkIds": [nid], "productTypes": ["wireless"], "perPage": 1000}),
+        "statuses": lambda: m.get_all("/organizations/%s/devices/statuses" % oid, {"networkIds": [nid], "productTypes": ["wireless", "switch", "appliance"], "perPage": 1000}),
         "clientsNow": G("/organizations/%s/wireless/clients/overview/byDevice" % oid, dict(org_net, perPage=1000)),
         "ssids": G("/networks/%s/wireless/ssids" % nid),
         "rfProfiles": G("/networks/%s/wireless/rfProfiles" % nid),
@@ -865,12 +865,15 @@ def _in_subnet(ip, cidr):
 def _net_path(R, nid, snap):
     """Wired path from each AP to the network's root (LLDP/CDP), the VLANs, and how each RADIUS server is reached."""
     topo = R.get("topology") if isinstance(R.get("topology"), dict) else None
+    sts = {x.get("serial"): x for x in R.get("statuses") or []}
     nodes, links = {}, []
     for n in (topo or {}).get("nodes") or []:
         d, disc = n.get("device") or {}, ((n.get("discovered") or {}).get("lldp") or (n.get("discovered") or {}).get("cdp") or {})
         nodes[n.get("derivedId")] = {"id": n.get("derivedId"), "serial": d.get("serial"), "name": d.get("name") or disc.get("systemName") or n.get("mac"),
                                      "model": d.get("model"), "type": d.get("productType") or "discovered", "root": bool(n.get("root")),
-                                     "status": d.get("status"), "inNetwork": n.get("type") == "device",
+                                     "status": (sts.get(d.get("serial")) or {}).get("status") or d.get("status"), "inNetwork": n.get("type") == "device",
+                                     "ip": (sts.get(d.get("serial")) or {}).get("lanIp"),
+                                     "wanIp": (sts.get(d.get("serial")) or {}).get("wan1Ip") or (sts.get(d.get("serial")) or {}).get("publicIp") if d.get("productType") == "appliance" else None,
                                      "description": disc.get("systemDescription") if n.get("type") != "device" else None}
     for l in (topo or {}).get("links") or []:
         ends = l.get("ends") or []
@@ -902,6 +905,7 @@ def _net_path(R, nid, snap):
             par = nodes.get(l["parent"]) or {"name": "?", "type": "?"}
             nxt = up.get(l["parent"])
             hops.append({"device": par.get("name"), "type": par.get("type"), "model": par.get("model"), "serial": par.get("serial"),
+                         "ip": par.get("ip"), "wanIp": par.get("wanIp"),
                          "fromPort": l["childPort"], "inPort": l["parentPort"], "inCfg": cfg(l["parent"], l["parentPort"]),
                          "outPort": nxt["childPort"] if nxt else None, "outCfg": cfg(l["parent"], nxt["childPort"]) if nxt else None})
             cur = l["parent"]

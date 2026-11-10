@@ -176,7 +176,7 @@ These are built from Meraki's per-AP, per-radio and network averages, so they fo
 
 How the APs connect to the rest of the network, from read-only calls: LLDP and CDP neighbours (`topology/linkLayer`), switch port names, the MX's VLANs (to tell whether a server is inside the site), the site-to-site VPN and the MX's internet uplinks.
 
-- **Topology**: every device LLDP or CDP sees, as a tree from the MX down, with the port each one uses to reach the device above it. Devices outside the network (for example another MX plugged into a switch) are marked.
+- **Topology**: every device LLDP or CDP sees, as a tree from the MX down, with its IP (switches and APs: LAN IP; MX: WAN IP) and the port each one uses to reach the device above it. Devices outside the network (for example another MX plugged into a switch) are marked.
 - **Path from an AP to the server**: pick an AP and an SSID and the path is drawn as a topology, left to right: client, AP, each switch, the MX, then the VPN peer and the server (or the internet). Wireless links are dashed, cables solid with the port number at each end, the VPN tunnel dashed green; each device and link carries a tick when it's online or reachable and a cross when it isn't. *802.1X login* follows the RADIUS request, which the AP sends from its own address; *Client data* follows the client's traffic to the internet.
 - Flagged: a RADIUS server reached through a VPN peer that isn't reachable, APs that connect through another AP rather than a switch, and devices outside the network.
 

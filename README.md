@@ -15,7 +15,7 @@ Meraki keeps detailed wireless history only for a short time (per-radio utilizat
 
 ## Start it
 
-1. Unzip the folder anywhere.
+1. Download `Cisco-Meraki-WLAN-Snapshot.zip` from the [latest release](https://github.com/rsd094/cisco-meraki-wlan-snapshot/releases/latest) and unzip it anywhere.
 2. Double-click the launcher for your system:
    - **Mac:** `Start WLAN Snapshot (Mac).command`. The first time, macOS may block it because it was downloaded. Right-click it, choose **Open**, then **Open** again.
    - **Windows:** `Start WLAN Snapshot (Windows).bat`.

@@ -484,7 +484,9 @@ def snapshot(m, args):
                   "clientsNow": cnmap.get(a["serial"])})
     snap["ssids"] = [{"number": x["number"], "name": x["name"], "authMode": x.get("authMode"),
                       "radiusServers": ["%s:%s" % (r.get("host"), r.get("port")) for r in (x.get("radiusServers") or [])],
-                      "radiusTesting": x.get("radiusTestingEnabled")}
+                      "radiusTesting": x.get("radiusTestingEnabled"), "encryption": x.get("encryptionMode"),
+                      "wpa": x.get("wpaEncryptionMode"), "ipMode": x.get("ipAssignmentMode"), "visible": x.get("visible"),
+                      "bandSelection": x.get("bandSelection"), "splash": x.get("splashPage")}
                      for x in (R["ssids"] or []) if x.get("enabled")]
 
     # ---- RF settings, regulatory domain, firmware, uptime, Meraki health alerts

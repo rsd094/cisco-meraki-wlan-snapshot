@@ -322,6 +322,18 @@ section,details{scroll-margin-top:52px}
 .sl:hover,.sl.on{border-color:var(--accent)}.sl .k{font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted)}.sl .v{font-size:24px;font-weight:650}
 .sl .s{font-size:12px;color:var(--muted)}.sl .miss{color:var(--fg)}
 .slbar{height:6px;background:var(--soft);border-radius:3px;overflow:hidden}.slbar span{display:block;height:100%;background:var(--accent)}
+
+/* scroll animations */
+@keyframes rvUp{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+@keyframes rvGrow{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+@keyframes rvDraw{from{clip-path:inset(0 100% 0 0)}to{clip-path:inset(0 0 0 0)}}
+.rv-wait .sec-head,.rv-wait .tile,.rv-wait .sl,.rv-wait .card,.rv-wait .attn,.rv-wait .callout{opacity:0}
+.rv-in .sec-head{animation:rvUp .45s ease both}
+.rv-in .tile,.rv-in .sl,.rv-in .card,.rv-in .attn,.rv-in .callout{animation:rvUp .5s cubic-bezier(.2,.7,.2,1) both;animation-delay:var(--rvd,0ms)}
+.rv-in .slbar span,.rv-in .sp-bar span,.rv-in .hbar .b,.rv-in .ambar .f,.rv-in .bar-fill{transform-origin:left;animation:rvGrow .9s cubic-bezier(.2,.7,.2,1) both;animation-delay:calc(var(--rvd,0ms) + 150ms)}
+.rv-in svg.spark{animation:rvDraw 1.1s ease both;animation-delay:calc(var(--rvd,0ms) + 100ms)}
+@media (prefers-reduced-motion:reduce){.rv-wait *,.rv-in *{animation:none!important;opacity:1!important}}
+@media print{.rv-wait *,.rv-in *{animation:none!important;opacity:1!important}}
 </style>
 </head>
 <body>
@@ -371,9 +383,16 @@ function apExtras(C){
       av==null?el('p',{class:'muted small'},'Take a new snapshot to see uptime.'):outages.length?el('ul',{class:'alist'},outages.map(x=>el('li',{},el('span',{class:'dot bad'}),el('div',{},el('b',{},x.ap),el('div',{class:'muted small'},`${x.offline} time${x.offline===1?'':'s'} offline · ${nf(x.notOnlineMin,0)} min not online · uptime ${nf(x.uptimePct,2)}%`+(x.changes.length?` · last change ${fds(x.changes[x.changes.length-1].ts)}: ${x.changes[x.changes.length-1].from||'?'} → ${x.changes[x.changes.length-1].to||'?'}`:'')))))):el('p',{class:'muted small'},`Every AP stayed online for all ${days(C)} days.`)));
 }
 /* key metrics: for each measure, the share of joins, client time, radio time or roams in a healthy range */
+const CFG_TILES=['radius','airrm','regulatory','airmarshal','ssids'];
 const SL_SNR=25, SL_BUSY=50, SL_LAT=32;
 function keyMetrics(S,Hs){
   const out=[];
+  {const n=S.aps.length,on=S.aps.filter(a=>(a.status||'')==='online').length,known=S.aps.some(a=>a.status),av=S.availability;
+   const up=av?S.aps.reduce((t,a)=>t+(((av.byAp||{})[a.serial]||{}).uptimePct??100),0)/(n||1):null;
+   const outs=av?Object.values(av.byAp||{}).reduce((t,x)=>t+(x.offline||0),0):null;
+   out.push({id:'availability',k:'Availability',v:up!=null?up:(known&&n?100*on/n:null),disp:known?`${on}/${n} online`:`${n} APs`,
+     bar:up!=null?`uptime ${nf(up,2)}% over ${days(S)} days, averaged across APs`:'APs online when the snapshot was taken',
+     miss:[outs==null?null:outs?`${outs} outage${outs>1?'s':''} in the period`:'no outages',on<n&&known?`${n-on} not online now`:null].filter(Boolean).join(' · ')||'—',rows:[],src:'availability'})}
   const c=get(S,'connections.all')||{};
   const st=[['Association',c.assoc],['Authentication',c.auth],['DHCP',c.dhcp],['DNS',c.dns]];
   out.push({id:'connect',k:'Successful connects',v:c.successPct,bar:'of joins completed association, authentication, DHCP and DNS',
@@ -868,6 +887,38 @@ function exportHtml(){
   document.body.append(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},1000);
 }
 let printing=false;
+/* scroll animations: each section fades up the first time it scrolls into view, its numbers count up,
+   bars grow and trend lines draw in. Sections already seen stay still when the page redraws (filters, clicks).
+   Off for people who ask their system for reduced motion, and never in print or PDF. */
+const REDUCED=matchMedia('(prefers-reduced-motion: reduce)').matches;
+const revealed=new Set();let rvObs=null;
+function animateIn(){
+  if(REDUCED||printing||!('IntersectionObserver' in window))return;
+  if(rvObs)rvObs.disconnect();
+  rvObs=new IntersectionObserver(es=>{for(const e of es)if(e.isIntersecting){rvObs.unobserve(e.target);revealSec(e.target)}},{rootMargin:'0px 0px -8% 0px',threshold:0.02});
+  for(const s of app.querySelectorAll(':scope > section, :scope > details')){
+    if(!s.id||revealed.has(s.id))continue;
+    s.classList.add('rv-wait');
+    s.querySelectorAll('.tile,.sl,.card,.attn,.callout').forEach((c,i)=>c.style.setProperty('--rvd',Math.min(i,10)*55+'ms'));
+    rvObs.observe(s);
+  }
+}
+function revealSec(s){
+  revealed.add(s.id);
+  s.classList.remove('rv-wait');s.classList.add('rv-in');
+  for(const v of s.querySelectorAll('.tile .v, .sl .v'))countUp(v);
+  setTimeout(()=>s.classList.remove('rv-in'),2200);
+}
+function countUp(node){
+  if(node.childNodes.length!==1||node.firstChild.nodeType!==3)return;
+  const txt=node.textContent,m=txt.match(/^(\d[\d,]*(?:\.\d+)?)(.*)$/);if(!m)return;
+  const end=parseFloat(m[1].replace(/,/g,'')),dec=(m[1].split('.')[1]||'').length,rest=m[2],t0=performance.now(),dur=800;
+  if(!isFinite(end)||end===0)return;
+  const step=now=>{const k=Math.min(1,(now-t0)/dur),e=1-Math.pow(1-k,3);
+    node.textContent=(end*e).toLocaleString('en-US',{minimumFractionDigits:dec,maximumFractionDigits:dec})+rest;
+    if(k<1)requestAnimationFrame(step);else node.textContent=txt};
+  requestAnimationFrame(step);
+}
 function exportPdf(){
   /* Print in the light theme with every section expanded; the browser's print dialog saves it as PDF. */
   const prev=document.documentElement.dataset.theme;
@@ -935,15 +986,9 @@ function render(){
       return{ss,recs,ok,to,apsOk,apsTo,state:ok?(to?'warn':'good'):(to?'bad':'same')}});
     return{list,good:list.filter(x=>x.state==='good'||x.state==='warn').length,n:list.length}};
   const SLc=keyMetrics(C,H),SLp=P?keyMetrics(P,HB):null;
-  const tiles=el('div',{class:'tiles'});
+  const tiles=el('div',{class:'tiles'}),obs=el('div',{class:'tiles'});
   const mkTile=(id,k,v,sub,extra,cls)=>el('button',{type:'button',class:'tile'+(openTile===id?' on':'')+(cls||''),'aria-expanded':String(openTile===id),onclick:()=>{openTile=openTile===id?null:id;render()}},
     el('div',{class:'k'},k),el('div',{class:'v'},v),extra||null,sub);
-  {const a=apStat(C),pa=P?apStat(P):null;
-   const down=C.aps.filter(x=>x.status&&x.status!=='online');
-   tiles.append(mkTile('aps','Availability',a.known?`${a.on}/${a.n} online`:`${a.n} APs`,
-     el('div',{class:'s'},!down.length?[`${nf(a.now,0)} clients connected now`,apUptime(C),fwLine(C)].filter(Boolean).join(' · '):down.length<=2?down.map(x=>`${x.name}: ${x.status}`).join(' · '):[['offline','offline'],['alerting','alerting'],['dormant','dormant']].map(([k,l])=>{const c=down.filter(x=>x.status===k).length;return c?`${c} ${l}`:''}).filter(Boolean).join(' · ')+' · click for the list'),
-     pa&&pa.known&&!isCross(C,P)?el('div',{class:'tchg'},el('span',{class:'chip '+(a.on===pa.on?'same':a.on>pa.on?'good':'bad')},a.on===pa.on?'No change':(a.on>pa.on?'+':'−')+Math.abs(a.on-pa.on)+' online'),el('span',{class:'muted small'},` vs ${pa.on}/${pa.n}`)):null,
-     down.length?' alertt':''))}
   {const r=radStat(C);
    const many=C.aps.length>3;
    const lines=r.list.length?el('div',{class:'s rlines'},r.list.map(x=>el('div',{},el('span',{class:'dot sm '+x.state}),`${x.ss.name} → ${x.ss.radiusServers.join(', ')||'no server'}`+(many?` · ${x.apsOk}/${C.aps.length} APs`:'')+(x.apsTo?` · ${x.apsTo} with timeouts`:'')))):el('div',{class:'s'},'No 802.1X SSIDs enabled');
@@ -971,6 +1016,10 @@ function render(){
    tiles.append(mkTile('airmarshal','Air Marshal',has?`${nf(nb.containedCount,0)} contained`:'—',el('div',{class:'s'},sub),
      ch?el('div',{class:'tchg'},ch.length?ch.map(([k,d])=>el('span',{class:'chip '+(k==='containedCount'?'same':d>0?'bad':'good')},`${d>0?'+':'−'}${Math.abs(d)} ${{containedCount:'contained',rogueCount:'rogue',spoofCount:'spoof'}[k]}`)):el('span',{class:'chip same'},'No change')):null,
      has&&(nb.rogueCount||nb.spoofCount)?' alertt':''))}
+  {const L=C.ssids||[],pl=P&&!isCross(C,P)&&(P.ssids||[]).length&&L.length?P.ssids:null;
+   const added=pl?L.filter(x=>!pl.some(y=>y.name===x.name)).map(x=>x.name):[],gone=pl?pl.filter(x=>!L.some(y=>y.name===x.name)).map(x=>x.name):[];
+   tiles.append(mkTile('ssids','SSIDs',`${L.length} configured`,el('div',{class:'s'},L.length?L.map(x=>x.name).join(' · '):'No SSIDs enabled'),
+     pl?el('div',{class:'tchg'},added.length||gone.length?el('span',{class:'chip same'},[added.length?'+ '+added.join(', '):null,gone.length?'− '+gone.join(', '):null].filter(Boolean).join(' · ')):el('span',{class:'chip same'},'No change')):null))}
   const pRows=problemRows(C),pReal=pRows.filter(r=>!isSynthetic(r)),pTot=(C.rates.disconnects||0)+(C.rates.dot1xFailures||0);
   const pTop=pReal.slice(0,3).reduce((t,r)=>t+r.problems,0);
   const pTile=el('button',{type:'button',class:'tile'+(pReal.some(r=>diagnose(r,C).sev==='bad')?' warnt':''),onclick:()=>goTo('problem-clients')},
@@ -978,11 +1027,11 @@ function render(){
     el('div',{class:'s'},pRows.length?`${nf(C.rates.disconnectsPerClientDay,1)} disconnects per client a day · top 3 real devices cause ${pTot?nf(100*pTop/pTot,0):0}% of problem events`+(pRows.length>pReal.length?` · ${pRows.length-pReal.length} Meraki test client${pRows.length-pReal.length>1?'s':''} set aside`:''):'No disconnects or 802.1X failures'),
     el('div',{class:'tlink'},'See who and what to do ↓'));
   for(const t of TILES){const m=tileMetric(t),a=m.v(C),b=P?m.v(P):null,tr=P?trend(m,b,a):null,out=showG&&outside(m,a);
-    tiles.append(mkTile(t.id,t.k,fmtVal(m,a),el('div',{class:'s'},t.sub(C)),
+    obs.append(mkTile(t.id,t.k,fmtVal(m,a),el('div',{class:'s'},t.sub(C)),
       P?el('div',{class:'tchg'},tr?el('span',{class:'chip '+tr.cls},tr.cls==='same'?'No change':fmtDelta(m,b,a)):el('span',{class:'muted small'},'—'),el('span',{class:'muted small'},' vs '+fmtVal(m,b))):null,
       out?' outg':''));
-    if(out)tiles.lastChild.append(el('div',{class:'gnote'},'Outside guideline '+m.tgt[1]))}
-  tiles.append(pTile);
+    if(out)obs.lastChild.append(el('div',{class:'gnote'},'Outside guideline '+m.tgt[1]))}
+  obs.append(pTile);
   let guide=null;
   const closeBtn=t=>el('button',{type:'button',class:'x','aria-label':'Close',onclick:()=>{openTile=null;render()}},'×');
   if(openTile==='aps'){
@@ -1040,6 +1089,20 @@ function render(){
       el('ol',{},on===false?el('li',{},'Turn on AI-RRM in Dashboard: Wireless › Radio settings › AI-RRM. Check your licensing and firmware meet Meraki\u2019s requirements for it first.'):null,
         ov.length?el('li',{},'Review each fixed radio: remove the fixed values unless there\u2019s a deliberate reason for them (Wireless › Radio settings, per AP).'):null,
         el('li',{},'Take another snapshot a week or two after a change and compare: busiest radio, weakest client signal and roaming should improve.')))}
+  else if(openTile==='ssids'){
+    const L=C.ssids||[],SN=C.ssidNames||{};
+    const auth=a=>({'open':'Open','psk':'Pre-shared key (PSK)','8021x-radius':'802.1X with RADIUS','8021x-meraki':'802.1X with Meraki auth','8021x-localradius':'802.1X with local RADIUS','ipsk-with-radius':'iPSK with RADIUS','ipsk-without-radius':'iPSK','open-enhanced':'Enhanced open (OWE)','open-with-radius':'Open with RADIUS (MAC auth)'})[a]||a||'—';
+    const bandsOf=x=>{const s=new Set(),aps=new Set();for(const a of C.aps)for(const r of a.radios||[])if((r.ssids||[]).includes(x.name)){s.add(String(r.band));aps.add(a.serial)}return{b:[...s].sort((p,q)=>parseFloat(p)-parseFloat(q)),n:aps.size}};
+    const cl=x=>C.clientConns?new Set(C.clientConns.filter(c=>String(c.ssid)===String(x.number)).map(c=>c.mac)).size:null;
+    const rows=L.map(x=>({...x,...bandsOf(x),clients:cl(x)}));
+    guide=el('div',{class:'guide'},el('div',{class:'guide-h'},el('b',{},'SSIDs configured',info(['ssids','status'],'Enabled SSIDs at capture time. Bands and APs are where each SSID was being broadcast.')),closeBtn()),
+      el('p',{},`${L.length} SSID${L.length===1?' is':'s are'} enabled on this network.`),
+      el('div',{class:'tbl-wrap'},el('table',{class:'dtable'},el('thead',{},el('tr',{},['#','SSID','Security','Encryption','RADIUS servers','Bands','APs broadcasting','Clients seen','IP assignment','Hidden'].map((h,i)=>el('th',{class:[0,6,7].includes(i)?'num':null,style:'padding:6px 8px'},h)))),
+        el('tbody',{},rows.map(x=>el('tr',{},el('td',{class:'num'},x.number),el('td',{},el('b',{},x.name)),el('td',{},auth(x.authMode)),
+          el('td',{},x.wpa||({wpa:'WPA','wpa-eap':'WPA Enterprise',wep:'WEP'})[x.encryption]||(x.authMode==='open'?'None':'—')),el('td',{class:'mono small'},(x.radiusServers||[]).join(', ')||'—'),
+          el('td',{},x.b.length?x.b.map(b=>el('span',{class:'qb band'+b.replace('.','')},band(b))):'—'),el('td',{class:'num'},`${x.n} of ${C.aps.length}`),
+          el('td',{class:'num'},x.clients==null?'—':nf(x.clients,0)),el('td',{},x.ipMode||'—'),el('td',{},x.visible===false?'Yes':x.visible===true?'No':'—')))))),
+      el('p',{class:'muted small',style:'margin-top:6px'},'Clients seen: clients checked for roaming (up to the 300 busiest) that connected to the SSID in this period. Encryption, IP assignment and hidden are shown for snapshots taken from today.'))}
   else if(openTile&&openTile.startsWith('sl:')){
     const s=SLc.find(x=>'sl:'+x.id===openTile);
     const T=(cols,rows)=>el('table',{class:'dtable'},el('thead',{},el('tr',{},cols.map(c=>el('th',{class:c[2]?'num':null},c[0])))),el('tbody',{},rows.map(r=>el('tr',{},cols.map(c=>el('td',{class:c[2]?'num':null},c[1](r)))))));
@@ -1167,9 +1230,9 @@ function render(){
      if(worse.length)att.push(['warn',`${worse.length} metric${worse.length>1?'s':''} got worse than ${isCross(C,P)?P.network:'the baseline'}: ${worse.slice(0,4).map(m=>m.n.toLowerCase()).join(', ')}${worse.length>4?'…':''}.`,'Scorecard',()=>goTo('scorecard')])}
    att.sort((a,b)=>(a[0]==='bad'?0:1)-(b[0]==='bad'?0:1))}
   const slStrip=el('div',{class:'slwrap'},el('div',{class:'slhead'},el('b',{},'Key metrics'),el('span',{class:'muted small'},' How much of each was in a healthy range this period. Click a metric for what’s behind it.')),
-    el('div',{class:'slgrid'},SLc.map((s,i)=>{const p=SLp?SLp[i].v:null,d=s.v!=null&&p!=null?s.v-p:null,on=openTile==='sl:'+s.id;
-      return el('button',{type:'button',class:'sl'+(on?' on':''),'aria-expanded':String(on),onclick:()=>{openTile=on?null:'sl:'+s.id;render()}},
-        el('div',{class:'k'},s.k),el('div',{class:'v'},s.v==null?'—':nf(s.v,1)+'%'),
+    el('div',{class:'slgrid'},SLc.map((s,i)=>{const p=SLp?SLp[i].v:null,d=s.v!=null&&p!=null?s.v-p:null,on=openTile===(s.id==='availability'?'aps':'sl:'+s.id);
+      return el('button',{type:'button',class:'sl'+(on?' on':''),'aria-expanded':String(on),onclick:()=>{openTile=on?null:(s.id==='availability'?'aps':'sl:'+s.id);render()}},
+        el('div',{class:'k'},s.k),el('div',{class:'v'},s.disp||(s.v==null?'—':nf(s.v,1)+'%')),
         el('div',{class:'slbar'},el('span',{style:`width:${s.v==null?0:Math.max(0,Math.min(100,s.v))}%`})),
         d!=null?el('div',{class:'tchg'},el('span',{class:'chip '+(Math.abs(d)<1?'same':d>0?'good':'bad')},Math.abs(d)<1?'No change':(d>0?'+':'−')+nf(Math.abs(d),1)+' pts'),el('span',{class:'muted small'},` vs ${nf(p,1)}%`)):null,
         el('div',{class:'s'},s.bar),el('div',{class:'s miss'},s.miss))})));
@@ -1179,7 +1242,11 @@ function render(){
     att.length?el('ul',{},att.map(([sev,txt,lab,go])=>el('li',{},el('span',{class:'dot '+sev}),el('span',{class:'attn-t'},txt),el('button',{type:'button',class:'gbtn sm',onclick:go},lab+' →')))):null);
   app.append(el('section',{id:'overview'},el('div',{class:'sec-head'},el('h2',{},'Overview'),
       el('p',{class:'muted small'},P?(isCross(C,P)?`Each tile shows ${C.network} against ${P.network}. Green better, red worse, grey about the same. Click a tile for details and what to review.`:'Each tile shows this snapshot and its change from the baseline. Green improved, red got worse, grey no change. Click a tile for details and what to review.'):'The key numbers for this snapshot. Click a tile for details and what to review.')),
-    attBox,slStrip,openTile&&openTile.startsWith('sl:')?guide:null,tiles,openTile&&!openTile.startsWith('sl:')?guide:null));
+    attBox,slStrip,openTile&&(openTile.startsWith('sl:')||openTile==='aps')?guide:null,
+    el('div',{class:'slhead'},el('b',{},'Network configuration'),el('span',{class:'muted small'},' How the network is set up: RADIUS, radio management, country rules, Air Marshal and SSIDs.')),
+    tiles,openTile&&CFG_TILES.includes(openTile)?guide:null,
+    el('div',{class:'slhead'},el('b',{},'Observations'),el('span',{class:'muted small'},' What clients ran into during the period.')),
+    obs,openTile&&!openTile.startsWith('sl:')&&openTile!=='aps'&&!CFG_TILES.includes(openTile)?guide:null));
 
   /* scorecard */
   const tb=el('tbody');
@@ -1704,6 +1771,7 @@ function render(){
     list,EP.length?el('p',{style:'margin-top:6px'},'N = access points, B = bands per AP, C = wireless clients, D = days in the period. Wireless event types read: '+Object.keys(EVT).join(', ')+'.'):null,(C.notes||[]).length?el('p',{style:'margin-top:8px'},'Notes: '+C.notes.join(' ')):null,
     el('p',{style:'margin-top:8px'},`Snapshot taken ${fd(C.capturedAt)}. Report generated ${fd(DATA.generatedAt)}.`)));
   app.append(el('p',{class:'foot muted small'},'Cisco Meraki WLAN Snapshot · Read-only: GET requests only, no changes made to your Meraki environment.'));
+  animateIn();
 }
 render();
 /* section links: highlight the section in view */

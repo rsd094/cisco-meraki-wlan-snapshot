@@ -50,13 +50,14 @@ Each snapshot saves two files in the `snapshots` folder:
 **How a report reads.** Most important first, detail one click away:
 
 1. **Things to look at**: the facts that need someone's attention, most serious first: Meraki health alerts, APs not online or with outages in the period, firmware behind or mixed, RADIUS timeouts, rogue or spoofed networks, AI-RRM off or radios fixed manually, clients to check, ping-pong and sticky clients, and, in a comparison, metrics that got worse. Healthy items are left out. Each has a button to its detail.
-2. **Key metrics**: five measures of client experience, each the share of joins, client time, radio time or roams in a healthy range (see below). Click one for what's behind it.
-3. **Overview tiles**: infrastructure (availability, RADIUS, AI-RRM, regulatory domain, Air Marshal), then auth failures, upstream packet loss, clients per day and problematic clients. The Availability tile shows how many APs are online; click it for a table of every AP with its IP, MAC, uptime over the period, status, clients, model and firmware. Click any tile for its review guide.
-4. **Scorecard**: every metric with its daily trend. Click a row for the clients, radios or networks behind it.
-5. Then a client's experience in order: **Problematic clients** (who has problems and what to do, then where joins fail and which APs log the events), **Roaming**, **Where clients connect** and **By band**.
-6. Then the RF underneath: **Radio utilization** and **RF configuration**, and finally **Sources and method**.
+2. **Key metrics**: availability (APs online now, with uptime over the period; click for every AP's IP, MAC and uptime), then five measures of client experience, each the share of joins, client time, radio time or roams in a healthy range (see below). Click one for what's behind it.
+3. **Network configuration**: RADIUS servers, AI-RRM, regulatory domain, Air Marshal and SSIDs. The SSIDs tile lists every enabled SSID; click it for each one's security, encryption, RADIUS servers, bands, APs broadcasting it, clients seen, IP assignment and whether it's hidden.
+4. **Observations**: what clients ran into: auth failure rate, upstream packet loss, clients per day and problematic clients. Click any tile for its review guide.
+5. **Scorecard**: every metric with its daily trend. Click a row for the clients, radios or networks behind it.
+6. Then a client's experience in order: **Problematic clients** (who has problems and what to do, then where joins fail and which APs log the events), **Roaming**, **Where clients connect** and **By band**.
+7. Then the RF underneath: **Radio utilization** and **RF configuration**, and finally **Sources and method**.
 
-A bar of section links stays at the top of the page as you scroll, with the section you're reading highlighted.
+A bar of section links stays at the top of the page as you scroll, with the section you're reading highlighted. Sections fade in the first time they scroll into view, with numbers counting up, bars growing and trend lines drawing in; this is off when your system asks for reduced motion, and never in print or PDF.
 
 **The period** is how much history a snapshot captures, counting back from when you click Generate report. The default and maximum is 14 days, because Meraki keeps per-radio detail for only 14 days. Use the same period every time so snapshots compare fairly. AP status and radio settings are read at the moment of capture.
 
@@ -157,6 +158,7 @@ Each key metric is a percentage: how much of the period, the joins or the roams 
 
 | Metric | Measured as | From |
 |---|---|---|
+| Availability | APs online when the snapshot was taken (the headline), with uptime over the period averaged across APs (the bar) | `devices/statuses`, `devices/availabilities/changeHistory` |
 | Successful connects | Joins that completed association, authentication, DHCP and DNS, out of all join attempts | `wireless/connectionStats` |
 | Coverage | Client-days on an AP and band whose average client SNR is 25 dB or better, weighted by each AP and band's clients a day | `wireless/signalQualityHistory`, `wireless/clientCountHistory` |
 | Capacity | Radio-hours with the channel under 50% busy, across every radio | `networkHealth/channelUtilization` |

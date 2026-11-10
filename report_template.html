@@ -913,7 +913,7 @@ function countUp(node){
   if(node.childNodes.length!==1||node.firstChild.nodeType!==3)return;
   const txt=node.textContent,m=txt.match(/^(\d[\d,]*(?:\.\d+)?)(.*)$/);if(!m)return;
   const end=parseFloat(m[1].replace(/,/g,'')),dec=(m[1].split('.')[1]||'').length,rest=m[2],t0=performance.now(),dur=800;
-  if(!isFinite(end)||end===0)return;
+  if(!isFinite(end)||end===0||rest.startsWith('/'))return;   /* leave counts like 3/3 online still: counting up would briefly read 2/3 */
   const step=now=>{const k=Math.min(1,(now-t0)/dur),e=1-Math.pow(1-k,3);
     node.textContent=(end*e).toLocaleString('en-US',{minimumFractionDigits:dec,maximumFractionDigits:dec})+rest;
     if(k<1)requestAnimationFrame(step);else node.textContent=txt};

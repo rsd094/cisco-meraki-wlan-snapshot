@@ -287,6 +287,11 @@ section,details{scroll-margin-top:52px}
 @media (max-width:640px){.attn li{grid-template-columns:auto 1fr}.attn li .gbtn{grid-column:2}.secnav{position:static}}
 @media print{.secnav{display:none}}
 @media (max-width:640px){.ctrls,.ctrls label{min-width:0;max-width:100%;flex-wrap:wrap}.ctrls select{max-width:100%;min-width:0}.exp{flex-wrap:wrap}}
+.rfilt{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;margin:4px 0 10px}
+.rstats{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px}
+.rstat{border:1px solid var(--line);border-radius:8px;padding:8px 10px}.rstat .k{font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted)}.rstat .v{font-size:20px;font-weight:600}
+#radios .sc-wrap.open .opt{display:none}
+@media print{#radios .opt{display:table-cell!important}}
 </style>
 </head>
 <body>
@@ -323,7 +328,7 @@ function spark(series,opts={}){
   const svg=document.createElementNS(ns,'svg');svg.setAttribute('class','spark'+(opts.wide?' wide':''));svg.setAttribute('viewBox',`0 0 ${w} ${h}`);svg.setAttribute('preserveAspectRatio','none');svg.setAttribute('aria-hidden','true');
   const parts=series.filter(s=>s.pts&&s.pts.length);if(!parts.length)return svg;
   const vals=parts.flatMap(s=>s.pts.map(p=>p[1])).filter(v=>v!=null);if(!vals.length)return svg;
-  let lo=Math.min(...vals),hi=Math.max(...vals);if(opts.zero)lo=Math.min(0,lo);if(hi-lo<1e-9){hi+=1;lo-=1}
+  let lo=Math.min(...vals),hi=Math.max(...vals);if(opts.zero)lo=Math.min(0,lo);if(opts.hi!=null)hi=Math.max(hi,opts.hi);if(hi-lo<1e-9){hi+=1;lo-=1}
   const total=parts.reduce((t,s)=>t+s.pts.length,0);let off=0;
   for(const s of parts){const n=s.pts.length;
     const xy=s.pts.map((p,i)=>p[1]==null?null:[((off+i)/(Math.max(total-1,1)))*w,h-2-((p[1]-lo)/(hi-lo))*(h-4)]);
@@ -568,7 +573,11 @@ function calloutBand(C,P){
 function calloutRadio(C,P){
   const busy=(C.radios||[]).filter(r=>(r.p95||0)>=40).sort((a,b)=>b.p95-a.p95);
   const lines=[];
-  if(busy.length)busy.forEach(r=>lines.push(`${r.ap} on ${band(r.band)} channel ${r.channel} is busy ${nf(r.p95,0)}% of the time at peak${r.p95>=60?', which is congested':''}. Clients on it get slower speeds.`));
+  const why=r=>{const nb=((C.neighbors||{}).coChannel||[]).find(x=>x.serial===r.serial&&String(x.band)===String(r.band)&&x.channel===r.channel),ab=get(C,['apBand',r.serial,String(r.band)])||{};
+    if(!nb||!nb.nets)return'';
+    return ` It shares the channel with ${nf(nb.nets,0)} neighbouring networks (${nf(nb.strong,0)} strong)`+(ab.clientsPerDay!=null?` while serving ${nf(ab.clientsPerDay,0)} clients a day${ab.gbPerDay!=null?` and ${nf(ab.gbPerDay,1)} GB`:''}`:'')+
+      (ab.gbPerDay!=null&&ab.gbPerDay<1&&nb.nets>=20?', so most of that airtime is likely the neighbours, not your clients.':'.')};
+  if(busy.length)busy.forEach(r=>lines.push(`${r.ap} on ${band(r.band)} channel ${r.channel} is busy ${nf(r.p95,0)}% of the time at peak${r.p95>=60?', which is congested':''}. Clients on it get slower speeds.`+why(r)));
   else lines.push('Every radio stays under 40% busy even at peak, so there is airtime to spare.');
   const spike=(C.radios||[]).filter(r=>(r.nonWifiMax||0)>=50);spike.forEach(r=>lines.push(`${r.ap} ${band(r.band)} briefly hit ${nf(r.nonWifiMax,0)}% non-Wi-Fi interference. Short spikes like this usually come from a nearby device switching on.`));
   const quiet=(C.radios||[]).filter(r=>r.band!=='2.4'&&(r.p95||0)<10).length;if(quiet)lines.push(`${quiet} of the 5 and 6 GHz radios stay under 10% busy.`);
@@ -590,7 +599,7 @@ function calloutIssues(C,P){
 const callout=(lines,title)=>el('div',{class:'callout'},el('b',{},title||'What this shows'),lines.length>1?el('ul',{},lines.map(l=>el('li',{},l))):el('p',{style:'margin-top:4px'},lines[0]||''));
 
 /* ---------- scorecard drill-down panels ---------- */
-let drill=null, drillSort=null, drillQ='';
+let drill=null, drillSort=null, drillQ='', rBand='all', rAp='all', rSel=null, rQ='';
 let panelW=null;try{panelW=+localStorage.getItem('wlan-snapshot-panel-w')||null}catch(e){}
 function resizer(){
   const h=el('div',{class:'rz',role:'separator','aria-orientation':'vertical','aria-label':'Resize detail panel. Drag, or use the arrow keys. Double-click to reset.',tabindex:'0'});
@@ -798,7 +807,7 @@ function render(){
   const cAcc=css('--accent'),cBase=css('--base');
   app.replaceChildren();
   document.title=C.network+' WLAN report';
-  app.classList.toggle('wide',!!drill&&!printing);
+  app.classList.toggle('wide',(!!drill||!!rSel)&&!printing);
   const label=s=>`${s.summary.label} · ${win(s.summary)}`;
 
   /* controls */
@@ -1128,20 +1137,76 @@ function render(){
     callout(calloutBand(C,P)),
     el('div',{class:'card'},el('div',{class:'tbl-wrap'},el('table',{},el('thead',{},el('tr',{},el('th',{},'Metric'),el('th',{class:'num'},'2.4 GHz'),el('th',{class:'num'},'5 GHz'),el('th',{class:'num'},'6 GHz'))),btb)))));
 
-  /* radio utilization */
-  const rows=(C.radios||[]).slice().sort((a,b)=>(a.band||'').localeCompare(b.band||'')||(b.p95||0)-(a.p95||0));
-  const utb=el('tbody');
-  for(const r of rows){const k=r.serial+'|'+r.radio,o=P?(P.radios||[]).find(x=>x.serial===r.serial&&x.radio===r.radio):null;
-    const cell=(f,hi)=>{const a=r[f],b=o?o[f]:null;if(!o||a==null||b==null)return el('td',{class:'num'},a==null?'—':nf(a,0)+'%');
-      const dd=a-b,cls=Math.abs(dd)<2?'same':dd<0?'good':'bad';return el('td',{class:'num'},el('span',{class:'muted'},nf(b,0)),' → ',el('span',{class:'delta '+cls},nf(a,0)+'%'))};
-    utb.append(el('tr',{},el('td',{},el('b',{},r.ap),el('div',{class:'muted small'},`${band(r.band)} · channel ${r.channel??'—'} · ${r.width||''}`)),
-      cell('avg'),cell('p95'),cell('max'),cell('nonWifiP95'),
-      el('td',{style:'min-width:160px'},el('div',{class:'sp-dates'},el('span',{},fds(C.window.t0)),el('span',{},fds(C.window.t1))),spark(P?[{pts:(HB||{})[k]||[],color:cBase},{pts:H[k]||[],color:cAcc}]:[{pts:H[k]||[],color:cAcc}],{wide:true,zero:true}))))}
-  app.append(el('section',{id:'radios'},el('div',{class:'sec-head'},el('h2',{},'Radio utilization'),el('p',{class:'muted small'},'How busy each radio is, from 10-minute samples. Each 5 GHz radio is shown separately. “Peak” is the 95th percentile: the radio is below it 95% of the time.')),
-    callout(calloutRadio(C,P)),
-    el('div',{class:'card'},el('h3',{},'Per radio',info('radioUtil','Meraki keeps this 10-minute data for 14 days, so each snapshot covers at most the last 14 days.')),
-      el('div',{class:'legend',style:'margin:8px 0'},P&&!isCross(C,P)?el('span',{style:'--c:var(--base)'},`Baseline (${win(P)})`):null,el('span',{style:'--c:var(--accent)'},P&&!isCross(C,P)?`This snapshot (${win(C)})`:`${win(C)}`),el('span',{class:'nolegend'},`Trend lines cover the whole ${C.window.days}-day period, one point per hour (busy hours show as spikes).`)),
-      el('div',{class:'tbl-wrap'},el('table',{},el('thead',{},el('tr',{},el('th',{},'Radio'),el('th',{class:'num'},'Average'),el('th',{class:'num'},'Peak (p95)'),el('th',{class:'num'},'Max'),el('th',{class:'num'},'Non-Wi-Fi at peak'),el('th',{},`Trend over ${C.window.days} days`))),utb)))));
+  /* radio utilization: filter by band and AP; click a radio for its clients and detail */
+  {const all=(C.radios||[]).slice().sort((a,b)=>(a.band||'').localeCompare(b.band||'')||(b.p95||0)-(a.p95||0));
+   const apB=(S,r)=>get(S,['apBand',r.serial,String(r.band)]);
+   const dual=r=>all.filter(x=>x.serial===r.serial&&x.band===r.band).length>1;
+   const bands=['2.4','5','6'].filter(b=>all.some(r=>r.band===b));
+   const apsL=[...new Set(all.map(r=>r.ap))].sort();
+   if(rAp!=='all'&&!apsL.includes(rAp))rAp='all';
+   const rows=all.filter(r=>(rBand==='all'||r.band===rBand)&&(rAp==='all'||r.ap===rAp));
+   const keyOf=r=>r.serial+'|'+r.radio;
+   if(rSel&&!all.some(r=>keyOf(r)===rSel))rSel=null;
+   const hiAll=Math.max(10,...rows.flatMap(r=>(H[keyOf(r)]||[]).map(p=>p[1]||0)),...(P?rows.flatMap(r=>((HB||{})[keyOf(r)]||[]).map(p=>p[1]||0)):[0]));
+   const utb=el('tbody');
+   const opt=td=>(td.classList.add('opt'),td);
+   const pick=k=>{rSel=rSel===k?null:k;rQ='';render();setTimeout(()=>goTo('radios'),30)};
+   for(const r of rows){const k=keyOf(r),o=P?(P.radios||[]).find(x=>x.serial===r.serial&&x.radio===r.radio):null;
+     const cell=(f,hi)=>{const a=r[f],b=o?o[f]:null;if(!o||a==null||b==null)return el('td',{class:'num'},a==null?'—':nf(a,0)+'%');
+       const dd=a-b,cls=Math.abs(dd)<2?'same':dd<0?'good':'bad';return el('td',{class:'num'},el('span',{class:'muted'},nf(b,0)),' → ',el('span',{class:'delta '+cls},nf(a,0)+'%'))};
+     const ca=(apB(C,r)||{}).clientsPerDay,cb=o?(apB(P,o)||{}).clientsPerDay:null;
+     const cc=el('td',{class:'num'},ca==null?'—':o&&cb!=null&&!isCross(C,P)?el('span',{},el('span',{class:'muted'},nf(cb,0)),' → ',nf(ca,0)):nf(ca,0),
+       dual(r)&&ca!=null?el('div',{class:'muted small',title:'Meraki counts clients per AP and band, so this covers both of this AP’s 5 GHz radios.'},'both 5 GHz radios'):null);
+     const on=rSel===k;
+     utb.append(el('tr',{class:'drill'+(on?' on':''),tabindex:'0',role:'button','aria-expanded':String(on),'aria-label':`${r.ap} ${band(r.band)} channel ${r.channel}: show clients and detail`,
+       onclick:e=>{if(e.target.closest('.i'))return;pick(k)},onkeydown:e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();pick(k)}}},
+       el('td',{},el('div',{class:'mname',style:'white-space:nowrap'},el('b',{},r.ap),el('span',{class:'chev','aria-hidden':'true'},on?'◂':'▸')),el('div',{class:'muted small'},`${band(r.band)} · channel ${r.channel??'—'} · ${r.width||''}`)),
+       cc,cell('avg'),cell('p95'),opt(cell('max')),opt(cell('nonWifiP95')),
+       el('td',{class:'opt',style:'min-width:160px'},el('div',{class:'sp-dates'},el('span',{},fds(C.window.t0)),el('span',{},fds(C.window.t1))),spark(P?[{pts:(HB||{})[k]||[],color:cBase},{pts:H[k]||[],color:cAcc}]:[{pts:H[k]||[],color:cAcc}],{wide:true,zero:true,hi:hiAll}))))}
+   if(!rows.length)utb.append(el('tr',{},el('td',{colspan:'7',class:'muted'},'No radios match these filters.')));
+   const nB=b=>all.filter(r=>(b==='all'||r.band===b)&&(rAp==='all'||r.ap===rAp)).length;
+   const filt=el('div',{class:'rfilt'},
+     el('div',{class:'qchips',role:'group','aria-label':'Band'},[['all','All bands'],...bands.map(b=>[b,band(b)])].map(([b,l])=>
+       el('button',{type:'button',class:'qchip','aria-pressed':String(rBand===b),disabled:nB(b)||b==='all'?null:'',onclick:()=>{rBand=b;rSel=null;render();goTo('radios')}},l,el('span',{class:'qn'},nf(nB(b),0))))),
+     el('label',{class:'small'},'AP ',el('select',{'aria-label':'Access point',onchange:e=>{rAp=e.target.value;rSel=null;render();goTo('radios')}},
+       el('option',{value:'all',selected:rAp==='all'?'':null},`All APs (${apsL.length})`),apsL.map(a=>el('option',{value:a,selected:rAp===a?'':null},a)))),
+     rBand!=='all'||rAp!=='all'?el('button',{type:'button',onclick:()=>{rBand='all';rAp='all';rSel=null;render();goTo('radios')}},'Clear filters'):null,
+     el('span',{class:'muted small'},`${rows.length} of ${all.length} radios`));
+   const table=el('div',{class:'card'},el('h3',{},'Per radio',info(['radioUtil','clients'],'Utilization: 10-minute samples, kept by Meraki for 14 days. Clients a day: unique clients per day on that AP and band, averaged over the period.')),
+     el('div',{class:'legend',style:'margin:8px 0'},P&&!isCross(C,P)?el('span',{style:'--c:var(--base)'},`Baseline (${win(P)})`):null,el('span',{style:'--c:var(--accent)'},P&&!isCross(C,P)?`This snapshot (${win(C)})`:`${win(C)}`),
+       el('span',{class:'nolegend'},`Trend lines: one point per hour over ${C.window.days} days, all on the same 0–${nf(hiAll,0)}% scale so radios compare at a glance. Click a radio for its clients.`)),
+     filt,
+     el('div',{class:'tbl-wrap'},el('table',{},el('thead',{},el('tr',{},el('th',{},'Radio'),el('th',{class:'num'},'Clients a day'),el('th',{class:'num'},'Average'),el('th',{class:'num'},'Peak (p95)'),el('th',{class:'num opt'},'Max'),el('th',{class:'num opt'},'Non-Wi-Fi at peak'),el('th',{class:'opt'},`Trend over ${C.window.days} days`))),utb)));
+   let panel=null;
+   if(rSel){const r=all.find(x=>keyOf(x)===rSel),ab=apB(C,r)||{},nb=((C.neighbors||{}).coChannel||[]).find(x=>x.serial===r.serial&&String(x.band)===String(r.band)&&x.channel===r.channel);
+     const SN=C.ssidNames||{};
+     const cl=(C.clientConns||[]).filter(x=>x.serial===r.serial&&String(x.band)===String(r.band)&&x.ch===r.channel);
+     const byC={};for(const x of cl){const c=byC[x.mac]||(byC[x.mac]={...x,n:0,ssids:new Set(),last:''});c.n+=x.n;c.ssids.add(SN[x.ssid]??('SSID '+x.ssid));if((x.last||'')>c.last)c.last=x.last}
+     const syn=c=>/synthetic client/i.test(c.name||''),crow=Object.values(byC).sort((a,b)=>syn(a)-syn(b)||b.n-a.n),nSyn=crow.filter(syn).length;
+     const stat=(l,v,s)=>el('div',{class:'rstat'},el('div',{class:'k'},l),el('div',{class:'v'},v),s?el('div',{class:'muted small'},s):null);
+     const body=el('tbody');
+     const fill=()=>{const q=rQ.toLowerCase(),L=crow.filter(c=>!q||[c.name,c.mac,c.maker,c.os,[...c.ssids].join(' ')].join(' ').toLowerCase().includes(q));
+       body.replaceChildren(...L.map(c=>el('tr',{class:syn(c)?'muted':null},el('td',{},el('b',{},syn(c)?'Meraki test client':c.name||c.mac),el('div',{class:'muted small'},[c.name&&c.name!==c.mac?c.mac:null,c.maker,c.os].filter(Boolean).join(' · '))),
+         el('td',{},[...c.ssids].join(', ')),el('td',{class:'num'},nf(c.n,0)),el('td',{},c.last?fds(c.last):'—'))));
+       if(!L.length)body.append(el('tr',{},el('td',{colspan:'4',class:'muted'},crow.length?'Nothing matches.':'No connections to this radio were recorded for the clients checked.')))};
+     fill();
+     panel=el('aside',{class:'card dpanel',role:'region','aria-label':'Radio detail'},
+       el('div',{class:'dpanel-h'},el('div',{},el('h3',{},`${r.ap} · ${band(r.band)}`,info(['clients','signal','usage','radioUtil','roaming'])),el('p',{class:'muted small',style:'margin-top:2px'},`Channel ${r.channel} · ${r.width||'—'}`)),
+         el('button',{type:'button',class:'x','aria-label':'Close panel',onclick:()=>{rSel=null;render()}},'×')),
+       el('div',{class:'rstats'},
+         stat('Clients a day',nf(ab.clientsPerDay,0),dual(r)?'both 5 GHz radios on this AP':'unique, averaged'),
+         stat('Client signal',ab.snr==null?'—':nf(ab.snr,0)+' dB','average SNR'+(dual(r)?', both 5 GHz radios':'')),
+         stat('Traffic',ab.gbPerDay==null?'—':nf(ab.gbPerDay,1)+' GB','a day'+(dual(r)?', both 5 GHz radios':'')),
+         stat('Busiest hour',r.busyHourAvg==null?'—':nf(r.busyHourAvg,0)+'%','average utilization'),
+         stat('Neighbours on its channel',nb?nf(nb.nets,0):'—',nb?`${nf(nb.strong,0)} strong (25 dB+)`:'from Air Marshal')),
+       el('div',{class:'drow'},el('input',{type:'search',class:'dsearch',placeholder:'Filter by name, MAC, maker, SSID…','aria-label':'Filter clients',value:rQ,oninput:e=>{rQ=e.target.value;fill()}}),
+         el('span',{class:'muted small'},`${crow.length-nSyn} client${crow.length-nSyn===1?'':'s'} connected to this radio`+(nSyn?` (plus ${nSyn} Meraki test client${nSyn>1?'s':''}, listed last)`:''))),
+       el('div',{class:'tbl-wrap dscroll'},el('table',{class:'dtable'},el('thead',{},el('tr',{},['Client','SSID','Connections','Last'].map((h,i)=>el('th',{class:i===2?'num':null},h)))),body)),
+       el('p',{class:'muted small'},'Clients are the ones checked for roaming (up to the 300 busiest), matched to this radio by AP, band and channel from their connection events. A client that stays connected all period counts as one connection.'));}
+   app.append(el('section',{id:'radios'},el('div',{class:'sec-head'},el('h2',{},'Radio utilization'),el('p',{class:'muted small'},'How busy each radio is, from 10-minute samples, and how many clients use it. Each 5 GHz radio is shown separately. “Peak” is the 95th percentile: the radio is below it 95% of the time.')),
+     callout(calloutRadio(C,P)),
+     el('div',{class:'sc-wrap'+(rSel?' open':''),style:rSel&&panelW?'--pw:'+panelW+'px':null},table,rSel?resizer():null,panel)));
+  }
 
   /* where clients connect: band buttons, SSID and radio drop-downs, radios and clients */
   {const CC=C.clientConns,SN=C.ssidNames||{};

@@ -105,8 +105,8 @@ ENDPOINTS = [
      "shows": "RADIUS servers tile", "lookback": "Current", "calls": "1"},
     {"area": "Radio utilization", "path": "GET /networks/{networkId}/networkHealth/channelUtilization", "use": "How busy every radio is, in 10-minute samples, including non-Wi-Fi interference. Each 5 GHz radio on dual-5 GHz APs separately.",
      "shows": "Busiest radio tile, radio utilization, scorecard", "lookback": "14 days (Meraki refuses older 10-minute data)", "calls": "2 (7-day pages)"},
-    {"area": "Clients and traffic", "path": "GET /networks/{networkId}/wireless/clientCountHistory", "use": "Clients per day, for the whole network and for each band.",
-     "shows": "Clients per day, band share", "lookback": "31 days", "calls": "4"},
+    {"area": "Clients and traffic", "path": "GET /networks/{networkId}/wireless/clientCountHistory", "use": "Clients per day, for the whole network, each band, and each AP and band.",
+     "shows": "Clients per day, band share, clients per radio", "lookback": "31 days", "calls": "4 + N×B"},
     {"area": "Clients and traffic", "path": "GET /networks/{networkId}/wireless/usageHistory", "use": "Traffic per day for each AP and band.",
      "shows": "Traffic per day, by band", "lookback": "31 days", "calls": "N × B"},
     {"area": "Clients and traffic", "path": "GET /networks/{networkId}/wireless/signalQualityHistory", "use": "Client signal-to-noise (SNR) per day for each AP and band.",
@@ -420,10 +420,10 @@ def snapshot(m, args):
         snap["clients"][b] = _series(m.get("/networks/%s/wireless/clientCountHistory" % nid,
                                            {"t0": iso(t0), "t1": iso(t1), "resolution": res, "band": b}, allow_fail=True), "clientCount")
 
-    log(" - signal and traffic per AP per band")
-    snap["signal"], snap["usage"] = {}, {}
+    log(" - signal, traffic and clients per AP per band")
+    snap["signal"], snap["usage"], snap["apClients"] = {}, {}, {}
     for s in serials:
-        snap["signal"][s], snap["usage"][s] = {}, {}
+        snap["signal"][s], snap["usage"][s], snap["apClients"][s] = {}, {}, {}
         bands = sorted({r["band"] for a in snap["aps"] if a["serial"] == s for r in a["radios"]}) or BANDS
         for b in bands:
             sq = m.get("/networks/%s/wireless/signalQualityHistory" % nid,
@@ -432,6 +432,9 @@ def snapshot(m, args):
             us = m.get("/networks/%s/wireless/usageHistory" % nid,
                        {"t0": iso(t0), "t1": iso(t1), "resolution": res, "deviceSerial": s, "band": b}, allow_fail=True)
             snap["usage"][s][b] = _series(us, "totalKbps")
+            cc = m.get("/networks/%s/wireless/clientCountHistory" % nid,
+                       {"t0": iso(t0), "t1": iso(t1), "resolution": res, "deviceSerial": s, "band": b}, allow_fail=True)
+            snap["apClients"][s][b] = _series(cc, "clientCount")
 
     log(" - connection results and latency per band")
     snap["connections"], snap["latency"] = {}, {}
@@ -1004,6 +1007,20 @@ def summarize(s):
     out["trafficGbPerDay"] = {b: rnd(v, 2) for b, v in gb.items()}
     out["trafficGbPerDay"]["all"] = rnd(sum(gb.values()), 2)
     out["trafficByAp"] = {k: rnd(v, 2) for k, v in ap_gb.items()}
+    # per AP and band: clients a day, client SNR, traffic (one AP can have two 5 GHz radios; these cover both)
+    ap_band = {}
+    for serial in set(s.get("signal", {})) | set(s.get("usage", {})) | set(s.get("apClients", {})):
+        for b in set((s.get("signal", {}).get(serial) or {})) | set((s.get("usage", {}).get(serial) or {})) | set((s.get("apClients", {}).get(serial) or {})):
+            sig = ((s.get("signal", {}).get(serial) or {}).get(b) or {}).get("snr") or []
+            us = (s.get("usage", {}).get(serial) or {}).get(b) or []
+            cc = (s.get("apClients", {}).get(serial) or {}).get(b)
+            kbps = mean([p["v"] for p in us])
+            ap_band.setdefault(serial, {})[b] = {
+                "clientsPerDay": rnd(mean([p["v"] for p in cc])) if cc is not None else None,
+                "clientsDaily": [[p["t"][:10], p["v"]] for p in cc] if cc else None,
+                "snr": rnd(mean([p["v"] for p in sig])),
+                "gbPerDay": rnd(kbps * 86400 / 8 / 1e6, 2) if kbps is not None else None}
+    out["apBand"] = ap_band
     # events
     ev = s["events"]
     out["events"] = ev

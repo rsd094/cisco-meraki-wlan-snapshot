@@ -92,7 +92,7 @@ Every figure in a report comes from these calls. The same list is shown in the a
 | RF configuration | `GET /organizations/{organizationId}/wireless/airMarshal/rules` | Air Marshal allow, block and alert rules that apply to this network. | Air Marshal tile | Current | 1 |
 | RF configuration | `GET /networks/{networkId}/wireless/ssids` | Enabled SSIDs, their security mode and RADIUS servers. | RADIUS servers tile | Current | 1 |
 | Radio utilization | `GET /networks/{networkId}/networkHealth/channelUtilization` | How busy every radio is, in 10-minute samples, including non-Wi-Fi interference. Each 5 GHz radio on dual-5 GHz APs separately. | Busiest radio tile, radio utilization, scorecard | 14 days (Meraki refuses older 10-minute data) | 2 (7-day pages) |
-| Clients and traffic | `GET /networks/{networkId}/wireless/clientCountHistory` | Clients per day, for the whole network and for each band. | Clients per day, band share | 31 days | 4 |
+| Clients and traffic | `GET /networks/{networkId}/wireless/clientCountHistory` | Clients per day, for the whole network, each band, and each AP and band. | Clients per day, band share, clients per radio | 31 days | 4 + N×B |
 | Clients and traffic | `GET /networks/{networkId}/wireless/usageHistory` | Traffic per day for each AP and band. | Traffic per day, by band | 31 days | N × B |
 | Clients and traffic | `GET /networks/{networkId}/wireless/signalQualityHistory` | Client signal-to-noise (SNR) per day for each AP and band. | Weakest client signal, by band | 31 days | N × B |
 | Clients and traffic | `GET /networks/{networkId}/clients` | Every client: name, MAC, maker, OS, SSID, last AP, data used, and the client ID needed for roaming. | Client lists in the detail panels | 31 days | 1+ (pages of 1,000) |
@@ -105,7 +105,7 @@ Every figure in a report comes from these calls. The same list is shown in the a
 | Client events | `GET /networks/{networkId}/events` | Wireless event log (productType=wireless): disassociations, WPA and 802.1X deauthentications, 802.1X failures and RADIUS timeouts, 802.1X successes, fast roams. | Disconnects, 802.1X failures, RADIUS reachability, client issues | 60+ days in practice | 1 per 1,000 events |
 | Roaming | `GET /networks/{networkId}/wireless/clients/{clientId}/connectivityEvents` | Each client's roam, connection and sticky events: the AP it left and joined, roam time, signal before and after. | Roaming tile, scorecard rows and section | 31 days | C (up to 300 busiest clients) |
 
-N = access points, B = bands per AP, C = wireless clients, D = days in the period. A 14-day snapshot of a 3-AP network makes about 130 calls. On large sites most calls go to roaming, one per client, capped at the 300 busiest clients. Calls are made one at a time, at most 8 a second (Meraki allows 10 per organization), and the tool waits and retries when Meraki asks it to slow down (HTTP 429).
+N = access points, B = bands per AP, C = wireless clients, D = days in the period. A 14-day snapshot of a 3-AP network makes about 140 calls. On large sites most calls go to roaming, one per client, capped at the 300 busiest clients. Calls are made one at a time, at most 8 a second (Meraki allows 10 per organization), and the tool waits and retries when Meraki asks it to slow down (HTTP 429).
 
 Wireless event types read from the event log: `disassociation`, `wpa_deauth`, `8021x_deauth`, `8021x_eap_failure`, `8021x_radius_timeout`, `8021x_client_timeout`, `8021x_eap_success`, `aps_association_reject`, `11r_fast_roam`.
 
@@ -124,6 +124,7 @@ Wireless event types read from the event log: `disassociation`, `wpa_deauth`, `8
 | Slow voice packets | Voice samples in Meraki's 32 ms-or-slower buckets ÷ all voice samples | `wireless/latencyStats` |
 | Upstream packet loss | Packets lost ÷ packets sent, client to AP, all APs | `wireless/devices/packetLoss/byDevice` |
 | Busiest 2.4 / 5 / 6 GHz radio | The highest 95th percentile of 10-minute utilization among that band's radios | `networkHealth/channelUtilization` |
+| Clients a day per radio | Unique clients per day on that AP and band, averaged over the period. Meraki counts per AP and band, so an AP with two 5 GHz radios shows one figure for both. Click a radio for the clients that connected to it (matched by AP, band and channel from connection events) and its client signal, traffic, busiest hour and neighbours on its channel | `wireless/clientCountHistory`, `clients/{clientId}/connectivityEvents` |
 | Non-Wi-Fi interference | The highest 95th percentile of non-Wi-Fi utilization on any radio | `networkHealth/channelUtilization` |
 | Weakest client signal | The lowest average client SNR of any AP and band | `wireless/signalQualityHistory` |
 | Clients on 5 or 6 GHz | 5 GHz + 6 GHz share of average daily clients per band | `wireless/clientCountHistory` |

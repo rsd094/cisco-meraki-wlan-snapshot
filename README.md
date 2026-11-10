@@ -8,6 +8,30 @@ A small app that runs on your own computer. Paste a Meraki API key, pick a wirel
 
 Meraki keeps detailed wireless history only for a short time (per-radio utilization for 14 days, most other history for 31 days). Saving snapshots as files means you can still compare against a point in time long after Meraki has deleted that data.
 
+## Requirements
+
+- **Python 3.8 or newer.** If it's missing, the launcher offers to install it: on Windows through Windows Package Manager (just for your account, no admin rights needed), and on a Mac through Apple's Command Line Tools installer. You can also get it from <https://www.python.org/downloads/>. On Windows, tick **"Add python.exe to PATH"** during install. No other packages are needed.
+- **A Meraki Dashboard API key.** A key for a read-only admin is enough, because the tool never makes changes. See [how to create an API key](https://developer.cisco.com/meraki/api-v1/authorization/).
+
+## Start it
+
+1. Unzip the folder anywhere.
+2. Double-click the launcher for your system:
+   - **Mac:** `Start WLAN Snapshot (Mac).command`. The first time, macOS may block it because it was downloaded. Right-click it, choose **Open**, then **Open** again.
+   - **Windows:** `Start WLAN Snapshot (Windows).bat`.
+3. Your browser opens the app. Paste your API key and click **Connect**.
+4. Pick a wireless network, give the snapshot a label (for example `pre-install`) and click **Generate report**.
+
+A snapshot takes about 30 seconds for a small network and longer for a large one; the page shows progress. The report opens when it's done. Keep the small terminal window open while you use the app. Closing it stops the app.
+
+From a terminal you can also run `python3 server.py --open`, adding `--port 9000` if you want a specific port.
+
+## About your API key
+
+- It's stored only in your browser on your computer. Untick "Remember on this computer" to keep it only until the browser tab closes.
+- It's sent only to this app running locally, which passes it to `api.meraki.com` and nowhere else.
+- It's never written into a snapshot or a report.
+
 ## What's in a report
 
 The screenshots below come from a demo snapshot in which every name, serial number, MAC address, IP address and SSID has been replaced. Click any image to see it full size.
@@ -79,30 +103,6 @@ How the APs connect to the rest of the network. A tree from LLDP and CDP shows e
 - **Compare:** load another snapshot of the same network (earlier or later) or of another network; every change is coloured.
 - **Export** as HTML (keeps working offline and can be loaded back to compare), data (.json) or PDF.
 - **Light and dark mode**, section links that stay at the top, an **(i)** beside every figure naming the API endpoint and how far back it reads, and a full list of every endpoint used under **Sources and method**.
-
-## Requirements
-
-- **Python 3.8 or newer.** If it's missing, the launcher offers to install it: on Windows through Windows Package Manager (just for your account, no admin rights needed), and on a Mac through Apple's Command Line Tools installer. You can also get it from <https://www.python.org/downloads/>. On Windows, tick **"Add python.exe to PATH"** during install. No other packages are needed.
-- **A Meraki Dashboard API key.** A key for a read-only admin is enough, because the tool never makes changes. See [how to create an API key](https://developer.cisco.com/meraki/api-v1/authorization/).
-
-## Start it
-
-1. Unzip the folder anywhere.
-2. Double-click the launcher for your system:
-   - **Mac:** `Start WLAN Snapshot (Mac).command`. The first time, macOS may block it because it was downloaded. Right-click it, choose **Open**, then **Open** again.
-   - **Windows:** `Start WLAN Snapshot (Windows).bat`.
-3. Your browser opens the app. Paste your API key and click **Connect**.
-4. Pick a wireless network, give the snapshot a label (for example `pre-install`) and click **Generate report**.
-
-A snapshot takes about 30 seconds for a small network and longer for a large one; the page shows progress. The report opens when it's done. Keep the small terminal window open while you use the app. Closing it stops the app.
-
-From a terminal you can also run `python3 server.py --open`, adding `--port 9000` if you want a specific port.
-
-## About your API key
-
-- It's stored only in your browser on your computer. Untick "Remember on this computer" to keep it only until the browser tab closes.
-- It's sent only to this app running locally, which passes it to `api.meraki.com` and nowhere else.
-- It's never written into a snapshot or a report.
 
 ## Snapshots and reports
 

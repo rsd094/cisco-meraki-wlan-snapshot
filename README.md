@@ -1,6 +1,6 @@
 # Cisco Meraki WLAN Snapshot
 
-> **Disclaimer: this is not a Cisco tool.** It is an independent, unofficial project. It is not made, endorsed or supported by Cisco or Meraki. It's an attempt to build a useful wireless report from the data the Meraki platform already generates and exposes through its public [Dashboard API](https://developer.cisco.com/meraki/api-v1/). Every figure is read from that API and then summarised by this tool, so numbers can differ from what Meraki Dashboard shows, and the explanations and suggested actions are this tool's interpretation, not Meraki guidance. Provided as is, with no warranty. Cisco and Meraki are trademarks of Cisco Systems, Inc.
+> **Disclaimer:** this is an independent, unofficial project. It is not made, endorsed or supported by Cisco or Meraki. It's an attempt to build a useful wireless report from the data the Meraki platform already generates and exposes through its public [Dashboard API](https://developer.cisco.com/meraki/api-v1/). Every figure is read from that API and then summarised by this tool, so numbers can differ from what Meraki Dashboard shows, and the explanations and suggested actions are this tool's interpretation, not Meraki guidance. Provided as is, with no warranty. Cisco and Meraki are trademarks of Cisco Systems, Inc.
 
 > **Read-only.** The tool only sends GET (read) requests to the Meraki Dashboard API. It never sends POST, PUT, PATCH or DELETE requests and makes no changes whatsoever, so it can't change any setting, device or network. A **read-only admin API key** is all it needs, and is recommended.
 
@@ -16,63 +16,63 @@ The screenshots below come from a demo snapshot in which every name, serial numb
 
 The first screen. **Things to look at** lists the facts that need attention, most serious first, each with a button to its detail; healthy items are left out. **Key metrics** shows availability (APs online, uptime over the period) and five client-experience measures: successful connects, coverage, capacity, roaming and responsiveness, each with the share in a healthy range and the main reason it falls short. **Network configuration** covers RADIUS servers, AI-RRM, the regulatory domain (and whether 6 GHz is allowed), Air Marshal and SSIDs. **Observations** covers auth failures, upstream packet loss, clients per day and problematic clients.
 
-![Overview](docs/screenshots/01-overview.png)
+![Overview](https://raw.githubusercontent.com/rsd094/cisco-meraki-wlan-snapshot/main/docs/screenshots/01-overview.png)
 
 Click any metric or tile for what's behind it. **Availability** lists every AP with its IP, MAC, uptime, status, clients, model and firmware, plus firmware status, Meraki's own health alerts and any outages in the period:
 
-![Availability](docs/screenshots/02-availability.png)
+![Availability](https://raw.githubusercontent.com/rsd094/cisco-meraki-wlan-snapshot/main/docs/screenshots/02-availability.png)
 
 **SSIDs** lists every enabled SSID with its security, encryption, RADIUS servers, bands, the APs broadcasting it and the clients seen on it:
 
-![SSIDs](docs/screenshots/03-ssids.png)
+![SSIDs](https://raw.githubusercontent.com/rsd094/cisco-meraki-wlan-snapshot/main/docs/screenshots/03-ssids.png)
 
 ### Scorecard
 
 Every metric in one table with a plain-language explanation and a daily trend line. In a comparison, each change is green (better), red (worse) or grey (within normal variation). Click a row to open a side panel with the clients, radios, APs or networks behind that number. Optional guidelines (rules of thumb, never used to colour comparisons) sit behind a button.
 
-![Scorecard](docs/screenshots/04-scorecard.png)
+![Scorecard](https://raw.githubusercontent.com/rsd094/cisco-meraki-wlan-snapshot/main/docs/screenshots/04-scorecard.png)
 
 ### Problematic clients
 
 The clients behind most disconnects and 802.1X failures, the most likely cause for each and what to do about it, with a link to that client's roam timeline. Below: where joins fail (association, authentication, DHCP or DNS), which event types dominate, and which APs log the most events. Meraki's own test clients are recognised and set aside.
 
-![Problematic clients](docs/screenshots/05-problematic-clients.png)
+![Problematic clients](https://raw.githubusercontent.com/rsd094/cisco-meraki-wlan-snapshot/main/docs/screenshots/05-problematic-clients.png)
 
 ### Roaming
 
 Roams rebuilt from each client's connection events and classed as good, suboptimal or bad (rules beside the timeline). A roam map shows how clients move between APs, a daily chart shows roam quality over time, and the clients struggling most are listed. Pick any client for a timeline of every roam and a log you can filter.
 
-![Roaming](docs/screenshots/06-roaming.png)
+![Roaming](https://raw.githubusercontent.com/rsd094/cisco-meraki-wlan-snapshot/main/docs/screenshots/06-roaming.png)
 
 ### Where clients connect
 
 Which band and radio clients actually use. The band buttons show each band's share of connection attempts and its success rate; the SSID and radio drop-downs narrow everything below, including the list of clients and the radios they joined.
 
-![Where clients connect](docs/screenshots/07-where-clients-connect.png)
+![Where clients connect](https://raw.githubusercontent.com/rsd094/cisco-meraki-wlan-snapshot/main/docs/screenshots/07-where-clients-connect.png)
 
 ### By band
 
 How 2.4, 5 and 6 GHz each perform side by side: client share, connection success, failures, latency, signal, busiest radio, packet loss and traffic.
 
-![By band](docs/screenshots/08-by-band.png)
+![By band](https://raw.githubusercontent.com/rsd094/cisco-meraki-wlan-snapshot/main/docs/screenshots/08-by-band.png)
 
 ### Radio utilization
 
 How busy every radio is from 10-minute samples (average, peak, maximum and non-Wi-Fi interference), how many clients use it, and a trend line on one shared scale so radios compare at a glance. Filter by band or AP; click a radio for its clients, signal, traffic, busiest hour and neighbouring networks on its channel.
 
-![Radio utilization](docs/screenshots/09-radio-utilization.png)
+![Radio utilization](https://raw.githubusercontent.com/rsd094/cisco-meraki-wlan-snapshot/main/docs/screenshots/09-radio-utilization.png)
 
 ### RF configuration
 
 The channel, width, power and SSIDs of every radio, and the RF profile in use. In a comparison, radios whose settings changed are highlighted.
 
-![RF configuration](docs/screenshots/10-rf-configuration.png)
+![RF configuration](https://raw.githubusercontent.com/rsd094/cisco-meraki-wlan-snapshot/main/docs/screenshots/10-rf-configuration.png)
 
 ### Network path
 
 How the APs connect to the rest of the network. A tree from LLDP and CDP shows every switch and AP with its IP and the port on each link. Pick an AP and an SSID to see the path drawn as a topology: client, AP, each switch with its port numbers, the MX, then the site-to-site VPN and the RADIUS server for an 802.1X login, or the internet for a client's own traffic. Each device and link shows a tick when it's online or reachable and a cross when it isn't.
 
-![Network path](docs/screenshots/11-network-path.png)
+![Network path](https://raw.githubusercontent.com/rsd094/cisco-meraki-wlan-snapshot/main/docs/screenshots/11-network-path.png)
 
 ### Also in every report
 

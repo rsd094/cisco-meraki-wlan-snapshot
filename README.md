@@ -1,20 +1,84 @@
 # Cisco Meraki WLAN Snapshot
 
-A small app that runs on your own computer and takes a WLAN snapshot of a Meraki wireless network. Each snapshot is saved as a file with its own report:
+> **Disclaimer: this is not a Cisco tool.** It is an independent, unofficial project. It is not made, endorsed or supported by Cisco or Meraki. It's an attempt to build a useful wireless report from the data the Meraki platform already generates and exposes through its public [Dashboard API](https://developer.cisco.com/meraki/api-v1/). Every figure is read from that API and then summarised by this tool, so numbers can differ from what Meraki Dashboard shows, and the explanations and suggested actions are this tool's interpretation, not Meraki guidance. Provided as is, with no warranty. Cisco and Meraki are trademarks of Cisco Systems, Inc.
 
-- **Overview:** access points online, RADIUS servers reachable, AI-RRM on or off (and any radios fixed manually, outside its control), connection success, auth failures, disconnects, busiest radio, weakest client signal, packet loss, slow voice traffic, good roams and clients per day. Click any tile for what it means and what to review.
-- **Scorecard:** 21 metrics, each with a plain-language explanation and a daily trend line. Click any row to see the clients, radios, APs or neighbouring networks behind that number.
-- **RF configuration:** band, channel, width, power and SSIDs of every radio, plus RF profile, AutoRF and neighbouring networks.
-- **By band:** how 2.4, 5 and 6 GHz each perform.
-- **Radio utilization:** how busy every radio is, from 10-minute samples, including each 5 GHz radio on dual-5 GHz APs.
-- **Roaming:** good, suboptimal and bad roams, a roam map between APs, the clients struggling most, and a roam timeline for any client.
-- **Client issues:** failed joins by stage, disconnects and 802.1X failures, the worst APs and clients.
+> **Read-only.** The tool only sends GET (read) requests to the Meraki Dashboard API. It never sends POST, PUT, PATCH or DELETE requests and makes no changes whatsoever, so it can't change any setting, device or network. A **read-only admin API key** is all it needs, and is recommended.
 
-Take a snapshot before an install and another after, or one every month. Open any report and load another snapshot to see what improved and what got worse.
+A small app that runs on your own computer. Paste a Meraki API key, pick a wireless network, and it takes a **snapshot**: about 30 seconds of read-only API calls, saved as a data file and a report. Take one before an install and another after, or one a month, and open any report to compare it with another snapshot of the same network or a different one.
 
-Meraki only keeps detailed wireless history for a short time: per-radio utilization for 14 days, most other history for 31 days. Saving snapshots as files means you can compare against a point in time long after Meraki has deleted that data.
+Meraki keeps detailed wireless history only for a short time (per-radio utilization for 14 days, most other history for 31 days). Saving snapshots as files means you can still compare against a point in time long after Meraki has deleted that data.
 
-> **Disclaimer: read-only.** This tool only sends GET (read) requests to the Meraki Dashboard API. It never sends POST, PUT, PATCH or DELETE requests and pushes no changes whatsoever, so it can't change any setting, device or network in your Meraki environment. A **read-only admin API key** is sufficient, and is recommended.
+## What's in a report
+
+The screenshots below come from a demo snapshot in which every name, serial number, MAC address, IP address and SSID has been replaced. Click any image to see it full size.
+
+### Overview
+
+The first screen. **Things to look at** lists the facts that need attention, most serious first, each with a button to its detail; healthy items are left out. **Key metrics** shows availability (APs online, uptime over the period) and five client-experience measures: successful connects, coverage, capacity, roaming and responsiveness, each with the share in a healthy range and the main reason it falls short. **Network configuration** covers RADIUS servers, AI-RRM, the regulatory domain (and whether 6 GHz is allowed), Air Marshal and SSIDs. **Observations** covers auth failures, upstream packet loss, clients per day and problematic clients.
+
+![Overview](docs/screenshots/01-overview.png)
+
+Click any metric or tile for what's behind it. **Availability** lists every AP with its IP, MAC, uptime, status, clients, model and firmware, plus firmware status, Meraki's own health alerts and any outages in the period:
+
+![Availability](docs/screenshots/02-availability.png)
+
+**SSIDs** lists every enabled SSID with its security, encryption, RADIUS servers, bands, the APs broadcasting it and the clients seen on it:
+
+![SSIDs](docs/screenshots/03-ssids.png)
+
+### Scorecard
+
+Every metric in one table with a plain-language explanation and a daily trend line. In a comparison, each change is green (better), red (worse) or grey (within normal variation). Click a row to open a side panel with the clients, radios, APs or networks behind that number. Optional guidelines (rules of thumb, never used to colour comparisons) sit behind a button.
+
+![Scorecard](docs/screenshots/04-scorecard.png)
+
+### Problematic clients
+
+The clients behind most disconnects and 802.1X failures, the most likely cause for each and what to do about it, with a link to that client's roam timeline. Below: where joins fail (association, authentication, DHCP or DNS), which event types dominate, and which APs log the most events. Meraki's own test clients are recognised and set aside.
+
+![Problematic clients](docs/screenshots/05-problematic-clients.png)
+
+### Roaming
+
+Roams rebuilt from each client's connection events and classed as good, suboptimal or bad (rules beside the timeline). A roam map shows how clients move between APs, a daily chart shows roam quality over time, and the clients struggling most are listed. Pick any client for a timeline of every roam and a log you can filter.
+
+![Roaming](docs/screenshots/06-roaming.png)
+
+### Where clients connect
+
+Which band and radio clients actually use. The band buttons show each band's share of connection attempts and its success rate; the SSID and radio drop-downs narrow everything below, including the list of clients and the radios they joined.
+
+![Where clients connect](docs/screenshots/07-where-clients-connect.png)
+
+### By band
+
+How 2.4, 5 and 6 GHz each perform side by side: client share, connection success, failures, latency, signal, busiest radio, packet loss and traffic.
+
+![By band](docs/screenshots/08-by-band.png)
+
+### Radio utilization
+
+How busy every radio is from 10-minute samples (average, peak, maximum and non-Wi-Fi interference), how many clients use it, and a trend line on one shared scale so radios compare at a glance. Filter by band or AP; click a radio for its clients, signal, traffic, busiest hour and neighbouring networks on its channel.
+
+![Radio utilization](docs/screenshots/09-radio-utilization.png)
+
+### RF configuration
+
+The channel, width, power and SSIDs of every radio, and the RF profile in use. In a comparison, radios whose settings changed are highlighted.
+
+![RF configuration](docs/screenshots/10-rf-configuration.png)
+
+### Network path
+
+How the APs connect to the rest of the network. A tree from LLDP and CDP shows every switch and AP with its IP and the port on each link. Pick an AP and an SSID to see the path drawn as a topology: client, AP, each switch with its port numbers, the MX, then the site-to-site VPN and the RADIUS server for an 802.1X login, or the internet for a client's own traffic. Each device and link shows a tick when it's online or reachable and a cross when it isn't.
+
+![Network path](docs/screenshots/11-network-path.png)
+
+### Also in every report
+
+- **Compare:** load another snapshot of the same network (earlier or later) or of another network; every change is coloured.
+- **Export** as HTML (keeps working offline and can be loaded back to compare), data (.json) or PDF.
+- **Light and dark mode**, section links that stay at the top, an **(i)** beside every figure naming the API endpoint and how far back it reads, and a full list of every endpoint used under **Sources and method**.
 
 ## Requirements
 
@@ -30,7 +94,7 @@ Meraki only keeps detailed wireless history for a short time: per-radio utilizat
 3. Your browser opens the app. Paste your API key and click **Connect**.
 4. Pick a wireless network, give the snapshot a label (for example `pre-install`) and click **Generate report**.
 
-A snapshot takes about a minute for a small network and longer for a large one; the page shows progress. The report opens when it's done. Keep the small terminal window open while you use the app. Closing it stops the app.
+A snapshot takes about 30 seconds for a small network and longer for a large one; the page shows progress. The report opens when it's done. Keep the small terminal window open while you use the app. Closing it stops the app.
 
 From a terminal you can also run `python3 server.py --open`, adding `--port 9000` if you want a specific port.
 
@@ -251,8 +315,8 @@ The same tool works without the app:
 ```bash
 export MERAKI_API_KEY=your_key_here
 python3 wlan_snapshot.py list
-python3 wlan_snapshot.py snapshot --network "Ontario" --label pre-install
-python3 wlan_snapshot.py report snapshots/Ontario-*.json
+python3 wlan_snapshot.py snapshot --network "Head Office" --label pre-install
+python3 wlan_snapshot.py report snapshots/Head-Office-*.json
 python3 wlan_snapshot.py endpoints
 ```
 
@@ -265,3 +329,4 @@ python3 wlan_snapshot.py endpoints
 - `wlan_snapshot.py`: takes snapshots, works out the metrics, builds reports. The `ENDPOINTS` list at the top documents every API call.
 - `report_template.html`: the report.
 - `Start WLAN Snapshot (Mac).command`, `Start WLAN Snapshot (Windows).bat`: the launchers.
+- `docs/screenshots/`: the images in this README, taken from an anonymised demo snapshot (no real names, serials, MACs, IPs or SSIDs). The report's screenshot mode (`report.html#shot=<section id>`) shows one section on its own in light mode, which is how they're made.

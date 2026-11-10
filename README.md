@@ -50,8 +50,8 @@ Each snapshot saves two files in the `snapshots` folder:
 **How a report reads.** Most important first, detail one click away:
 
 1. **Things to look at**: the facts that need someone's attention, most serious first: Meraki health alerts, APs not online or with outages in the period, firmware behind or mixed, RADIUS timeouts, rogue or spoofed networks, AI-RRM off or radios fixed manually, clients to check, ping-pong and sticky clients, and, in a comparison, metrics that got worse. Healthy items are left out. Each has a button to its detail.
-2. **Key metrics**: six measures of client experience, each the share of joins, client time, radio time or roams in a healthy range (see below). Click one for what's behind it.
-3. **Overview tiles**: infrastructure (APs, RADIUS, AI-RRM, regulatory domain, Air Marshal), then the key client-experience numbers. Click a tile for its review guide.
+2. **Key metrics**: five measures of client experience, each the share of joins, client time, radio time or roams in a healthy range (see below). Click one for what's behind it.
+3. **Overview tiles**: infrastructure (APs, RADIUS, AI-RRM, regulatory domain, Air Marshal), then auth failures, upstream packet loss, clients per day and problematic clients. On sites with up to 5 APs the Access points tile lists each AP on one line: name, MAC, LAN IP and uptime. Click a tile for its review guide.
 4. **Scorecard**: every metric with its daily trend. Click a row for the clients, radios or networks behind it.
 5. Then a client's experience in order: **Problematic clients** (who has problems and what to do, then where joins fail and which APs log the events), **Roaming**, **Where clients connect** and **By band**.
 6. Then the RF underneath: **Radio utilization** and **RF configuration**, and finally **Sources and method**.
@@ -162,7 +162,6 @@ Each key metric is a percentage: how much of the period, the joins or the roams 
 | Capacity | Radio-hours with the channel under 50% busy, across every radio | `networkHealth/channelUtilization` |
 | Roaming | Good roams (under 1 s, no signal drop, no gap) out of all roams | `clients/{clientId}/connectivityEvents` |
 | Responsiveness | Normal (best-effort) packets that crossed the air in under 32 ms | `wireless/latencyStats` |
-| AP availability | Time each AP was online during the period, averaged across APs | `devices/availabilities/changeHistory` |
 
 These are built from Meraki's per-AP, per-radio and network averages, so they follow the same idea as other vendors' experience metrics but aren't directly comparable with tools that measure each client minute by minute.
 

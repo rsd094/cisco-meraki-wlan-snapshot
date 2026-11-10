@@ -322,6 +322,8 @@ section,details{scroll-margin-top:52px}
 .sl:hover,.sl.on{border-color:var(--accent)}.sl .k{font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted)}.sl .v{font-size:24px;font-weight:650}
 .sl .s{font-size:12px;color:var(--muted)}.sl .miss{color:var(--fg)}
 .slbar{height:6px;background:var(--soft);border-radius:3px;overflow:hidden}.slbar span{display:block;height:100%;background:var(--accent)}
+.aplines{font-size:11.5px}.aplines div{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tile.tile2{grid-column:span 2}@media (max-width:640px){.tile.tile2{grid-column:auto}.aplines div{white-space:normal}}
 </style>
 </head>
 <body>
@@ -347,6 +349,8 @@ const win=S=>fds(S.window.t0)+' – '+fd(S.window.t1);
 const css=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
 const days=S=>S.window.days;
 const band=b=>b+' GHz';
+const AP_LINES=5;   /* sites with this many APs or fewer list each AP on the tile */
+const apUp=(S,a)=>{if(!S.availability)return null;const x=(S.availability.byAp||{})[a.serial];return (x?nf(x.uptimePct,2):'100')+'% up'};
 const apUptime=S=>{const av=S.availability;if(!av)return null;const L=Object.values(av.byAp||{}),out=L.reduce((t,x)=>t+(x.offline||0),0);
   if(!L.length)return `no outages in ${days(S)} days`;const worst=L.slice().sort((a,b)=>(a.uptimePct??100)-(b.uptimePct??100))[0];
   return `${out} outage${out===1?'':'s'} · lowest uptime ${nf(worst.uptimePct,2)}% (${worst.ap})`};
@@ -394,10 +398,6 @@ function keyMetrics(S,Hs){
   const L=get(S,'latency.all.bestEffortTraffic');
   out.push({id:'latency',k:'Responsiveness',v:L&&L.over32Pct!=null?100-L.over32Pct:null,bar:`of normal (best-effort) packets crossed the air in under ${SL_LAT} ms`,
     miss:L?`${nf(L.over32Pct,1)}% took ${SL_LAT} ms or more`:'—',rows:[['Voice','voiceTraffic'],['Video','videoTraffic'],['Normal','bestEffortTraffic'],['Background','backgroundTraffic']].map(([l,k])=>{const x=get(S,['latency','all',k])||{};return{l,v:x.over32Pct==null?null:100-x.over32Pct,avg:x.avg}}),src:'latency'});
-  const av=S.availability;
-  const up=av?S.aps.map(a=>{const x=(av.byAp||{})[a.serial];return{l:a.name,v:x?x.uptimePct:100,off:x?x.offline:0}}):null;
-  out.push({id:'aphealth',k:'AP availability',v:up&&up.length?up.reduce((t,x)=>t+x.v,0)/up.length:null,bar:'of the time each AP was online, averaged across APs',
-    miss:up?(up.some(x=>x.off)?`${up.filter(x=>x.off).length} AP(s) went offline`:'no outages'):'take a new snapshot to see uptime',rows:up?up.sort((a,b)=>a.v-b.v):[],src:'availability'});
   return out;
 }
 const regionName=c=>{try{return c?new Intl.DisplayNames(['en'],{type:'region'}).of(String(c).toUpperCase()):'—'}catch(e){return c||'—'}};
@@ -520,8 +520,6 @@ const byId=Object.fromEntries(MET.map(m=>[m.id,m]));
 const busiest=S=>{let best=null;for(const r of S.radios||[])if(r.p95!=null&&(best==null||r.p95>best.p95))best=r;return best};
 const TILES=[
  {id:'auth',k:'Auth failure rate',m:'auth',sub:S=>`${nf(get(S,'connections.all.auth'),0)} auth failures · ${nf(S.rates.dot1xFailures,0)} 802.1X failures`,jump:'problem-clients'},
- {id:'radio',k:'Busiest radio at peak',m:null,v:S=>(busiest(S)||{}).p95,u:'%',d:0,hi:false,tol:2,sub:S=>{const b=busiest(S);return b?`${b.ap} · ${band(b.band)} ch ${b.channel}`:''},jump:'radios'},
- {id:'snr',k:'Weakest client signal',m:'snr',sub:S=>{const w=worstSnr(S);return w?`${w.ap} · ${band(w.band)}`:''},jump:'band'},
  {id:'loss',k:'Upstream packet loss',m:'loss',sub:S=>{const w=(S.apLoss||[])[0],c=topLossClients(S)[0];return w?`Client → AP. Worst AP: ${w.ap} ${nf(w.upPct,1)}%`+(c?` · ${c.name||c.mac} causes ${nf(c.share,0)}% of lost packets`:''):'Client → AP direction'},jump:'band'},
  {id:'clients',k:'Clients per day',m:'clients',sub:S=>`${nf(get(S,'trafficGbPerDay.all'),1)} GB of traffic a day`,jump:'band'},
 ];
@@ -544,7 +542,7 @@ function review(id,C){
      steps:[(()=>{const a=C.apLoss||[];return a.length?'By AP: '+a.map(x=>`${x.ap} ${nf(x.upPct,1)}% up / ${x.downPct!=null?nf(x.downPct,1):'—'}% down`).join(' · ')+'. '+(a.length>1&&a[a.length-1].upPct>=2?'Every AP sees loss, so it\u2019s the clients rather than one AP.':'Start with the AP at the top.'):''})(),
        (()=>{const c=topLossClients(C).slice(0,3);return c.length?'Clients losing the most packets: '+c.map(x=>`${x.name||x.mac} (${nf(x.share,0)}% of lost packets, ${nf(x.upLossPct,1)}% of its own)`).join(', ')+'. Check where they sit and whether they\u2019re on 2.4 GHz; update their Wi-Fi drivers.':''})(),
        'Raise the minimum bitrate so distant clients move to a closer AP instead of sending at low rates.',
-       'Low client signal and upstream loss usually go together: compare with the Weakest client signal tile.']},
+       'Low client signal and upstream loss usually go together: compare with the Coverage metric.']},
    voice:{what:'Share of voice-marked traffic taking 32 ms or more over the air.',
      steps:['Check which SSID your voice devices use and that QoS (WMM / DSCP) is set for voice on it.','Keep voice devices on 5 or 6 GHz.','If you have no voice devices, this figure comes from a few mismarked packets and can be ignored.']},
    roaming:{what:'How well clients move between APs: how quickly, and whether they land on a better signal.',
@@ -927,8 +925,7 @@ function render(){
     el('div',{class:'meta'},
       el('span',{},'Snapshot: ',el('b',{},win(C)),` (${C.label}, ${C.window.days} days)`,info([],el('span',{},el('b',{},'Period: '),`every number summarises these ${C.window.days} days, ending when the snapshot was taken on ${fd(C.capturedAt)}. AP status and radio settings are as of that moment. Meraki keeps per-radio detail for only 14 days, so a snapshot can only cover the recent past; saved snapshots can be compared however far apart they are.`))),
       P?el('span',{},'Compared with: ',el('b',{},isCross(C,P)?`${P.network}, ${win(P)}`:win(P)),` (${P.label})`):null,
-      el('span',{},'APs: ',el('b',{},String(C.aps.length))),
-      el('span',{},'Average clients a day: ',el('b',{},nf(get(C,'clients.all'),0)))),
+      ),
     P&&isCross(C,P)?el('p',{class:'warnline'},`Comparing two different networks. Green means ${C.network} does better than ${P.network}, red means it does worse. Sizes, layouts and uses differ, so treat differences as prompts to look, not verdicts. AP-by-AP sections show ${C.network} only.`):null,
     P&&!isCross(C,P)&&(P.window.t1>C.window.t0&&C.window.t1>P.window.t0)?el('p',{class:'warnline'},'These two periods overlap, so some days are counted in both and real changes look smaller than they are. For a fair comparison, take snapshots that don’t overlap.'):null,
     P&&P.window.days!==C.window.days?el('p',{class:'warnline'},`The periods are different lengths (${P.window.days} and ${C.window.days} days). Rates and daily averages still compare; peaks and totals may not.`):null));
@@ -947,9 +944,11 @@ function render(){
   {const a=apStat(C),pa=P?apStat(P):null;
    const down=C.aps.filter(x=>x.status&&x.status!=='online');
    tiles.append(mkTile('aps','Access points',a.known?`${a.on}/${a.n} online`:`${a.n} APs`,
+     C.aps.length<=AP_LINES?el('div',{class:'s rlines aplines'},C.aps.map(x=>el('div',{title:x.name},el('span',{class:'dot sm '+((x.status||'')==='online'?'good':x.status==='alerting'?'warn':x.status?'bad':'same')}),
+         [x.name,x.mac||null,x.lanIp||null,apUp(C,x)].filter(Boolean).join(' · '))),el('div',{class:'muted'},[`${nf(a.now,0)} clients now`,fwLine(C)].filter(Boolean).join(' · '))):
      el('div',{class:'s'},!down.length?[`${nf(a.now,0)} clients connected now`,apUptime(C),fwLine(C)].filter(Boolean).join(' · '):down.length<=2?down.map(x=>`${x.name}: ${x.status}`).join(' · '):[['offline','offline'],['alerting','alerting'],['dormant','dormant']].map(([k,l])=>{const c=down.filter(x=>x.status===k).length;return c?`${c} ${l}`:''}).filter(Boolean).join(' · ')+' · click for the list'),
      pa&&pa.known&&!isCross(C,P)?el('div',{class:'tchg'},el('span',{class:'chip '+(a.on===pa.on?'same':a.on>pa.on?'good':'bad')},a.on===pa.on?'No change':(a.on>pa.on?'+':'−')+Math.abs(a.on-pa.on)+' online'),el('span',{class:'muted small'},` vs ${pa.on}/${pa.n}`)):null,
-     down.length?' alertt':''))}
+     (down.length?' alertt':'')+(C.aps.length<=AP_LINES?' tile2':'')))}
   {const r=radStat(C);
    const many=C.aps.length>3;
    const lines=r.list.length?el('div',{class:'s rlines'},r.list.map(x=>el('div',{},el('span',{class:'dot sm '+x.state}),`${x.ss.name} → ${x.ss.radiusServers.join(', ')||'no server'}`+(many?` · ${x.apsOk}/${C.aps.length} APs`:'')+(x.apsTo?` · ${x.apsTo} with timeouts`:'')))):el('div',{class:'s'},'No 802.1X SSIDs enabled');
@@ -998,12 +997,12 @@ function render(){
     const stCls=st=>st==='online'?'good':st==='alerting'?'warn':st==='offline'?'bad':'same';
     guide=el('div',{class:'guide'},el('div',{class:'guide-h'},el('b',{},'Access points',info(['apStatus','clientsNow'],'Status at the moment the snapshot was taken.')),closeBtn()),
       el('p',{},`${n('online')} of ${rows.length} online`+(n('alerting')?` · ${n('alerting')} alerting`:'')+(n('offline')?` · ${n('offline')} offline`:'')+` · ${nf(now,0)} clients connected now. Offline and alerting APs are listed first.`),
-      miniTable({id:'ap-list',rows,search:'Find an AP by name, model or IP…',
+      miniTable({id:'ap-list',rows,search:'Find an AP by name, model, MAC or IP…',
         chips:[['all','All',()=>true],['online','Online',r=>r.st==='online'],['alerting','Alerting',r=>r.st==='alerting'],['offline','Offline',r=>r.st==='offline']],
         cols:[{l:'Status',f:r=>el('span',{class:'stcell'},el('span',{class:'dot '+stCls(r.st)}),r.st[0].toUpperCase()+r.st.slice(1))},{l:'AP',f:r=>el('b',{},r.name)},{l:'Model',f:r=>r.model||'—'},{l:'Firmware',f:r=>r.firmware||'—'},
           {l:'Clients now',num:1,f:r=>r.clientsNow==null?'—':nf(r.clientsNow,0)},
-          {l:`Uptime (${days(C)} d)`,num:1,f:r=>{const x=get(C,['availability','byAp',r.serial]);return !C.availability?'—':x?el('span',{title:`${x.offline} outage(s), ${nf(x.notOnlineMin,0)} min not online`},nf(x.uptimePct,2)+'%'):'100%'}},{l:'LAN IP',f:r=>el('span',{class:'mono small'},r.lanIp||'—')},{l:'Last seen',f:r=>r.st!=='online'&&r.lastReportedAt?fd(r.lastReportedAt):'—'}],
-        text:r=>[r.name,r.model,r.lanIp,r.firmware,r.st].join(' ')}),
+          {l:`Uptime (${days(C)} d)`,num:1,f:r=>{const x=get(C,['availability','byAp',r.serial]);return !C.availability?'—':x?el('span',{title:`${x.offline} outage(s), ${nf(x.notOnlineMin,0)} min not online`},nf(x.uptimePct,2)+'%'):'100%'}},{l:'MAC · LAN IP',f:r=>el('span',{class:'mono small'},[r.mac,r.lanIp].filter(Boolean).join(' · ')||'—')},{l:'Last seen',f:r=>r.st!=='online'&&r.lastReportedAt?fd(r.lastReportedAt):'—'}],
+        text:r=>[r.name,r.model,r.mac,r.lanIp,r.firmware,r.st].join(' ')}),
       apExtras(C),
       el('ol',{},el('li',{},'Offline or alerting APs: check power (PoE budget on the switch port), the uplink and the AP’s event log in Dashboard.'),el('li',{},'Uneven client counts can be normal (meeting rooms, entrances) or a sign of one AP holding clients that should roam.')))}
   else if(openTile==='radius'){
@@ -1050,8 +1049,8 @@ function render(){
       capacity:()=>T([['Radio',r=>r.l],[`Hours at ${SL_BUSY}%+ busy`,r=>nf(r.over,0),1],['Share of hours',r=>nf(100*r.over/r.n,1)+'%',1]],s.rows),
       roaming:()=>T([['Roams',r=>r.l],['Count',r=>nf(r.n,0),1]],s.rows),
       latency:()=>T([['Traffic class',r=>r.l],[`Under ${SL_LAT} ms`,r=>r.v==null?'—':nf(r.v,1)+'%',1],['Average',r=>r.avg==null?'—':nf(r.avg,1)+' ms',1]],s.rows),
-      aphealth:()=>T([['AP',r=>r.l],['Uptime',r=>nf(r.v,2)+'%',1],['Times offline',r=>nf(r.off,0),1]],s.rows)}[s.id];
-    const jump={connect:'problem-clients',coverage:'band',capacity:'radios',roaming:'roaming',latency:'band',aphealth:null}[s.id];
+      }[s.id];
+    const jump={connect:'problem-clients',coverage:'band',capacity:'radios',roaming:'roaming',latency:'band'}[s.id];
     guide=el('div',{class:'guide'},el('div',{class:'guide-h'},el('b',{},`Metric: ${s.k}`,info(s.src)),closeBtn()),
       el('p',{},`${s.v==null?'—':nf(s.v,1)+'%'} ${s.bar}. ${s.miss[0].toUpperCase()+s.miss.slice(1)}.`),
       el('p',{class:'muted small'},'The healthy range is a common rule of thumb, not a Meraki threshold. Use it to compare snapshots and sites, not as pass or fail.'),
@@ -1262,9 +1261,7 @@ function render(){
         el('td',{},band(r.band)),P&&!isCross(C,P)?el('td',{class:'muted'},f(o)):null,el('td',{},f(r)),el('td',{class:'muted small'},(r.ssids||[]).join(', ')||'—')))})}
   const prof=S=>{const p=(S.rfProfiles||[])[0];if(!p)return'—';const fl=Object.entries(p.flexRadios||{}).filter(([m])=>S.aps.some(a=>a.model===m)).map(([m,b])=>m+' → '+b.join('/')).join(', ');
     return `Band steering ${p.bandSteering?'on':'off'} · min bitrate 2.4/5/6 GHz: ${[p['2.4'],p['5'],p['6']].map(z=>z&&z.minBitrate||'—').join(' / ')} Mbps`+(fl?` · flex radios ${fl}`:'')};
-  const rrm=S=>{const r=S.autoRf;if(!r)return'—';return `AI-RRM ${r.ai&&r.ai.enabled?'on':'off'} · FRA ${r.fra&&r.fra.enabled?'on':'off'} · minimise changes in busy hours ${r.busyHour&&r.busyHour.minimizeChanges&&r.busyHour.minimizeChanges.enabled?'on':'off'}`};
-  const nb=S=>S.neighbors?`${nf(S.neighbors.bssids,0)} heard, ${nf(S.neighbors.strongBssids,0)} strong (25 dB or more)`:'—';
-  const ctb=el('tbody',{},[['RF profile',prof,'rfProfiles'],['AutoRF',rrm,'rrm'],['Neighbouring networks',nb,'airMarshal']].map(([n,f,src])=>
+  const ctb=el('tbody',{},[['RF profile',prof,'rfProfiles']].map(([n,f,src])=>
     el('tr',{class:P&&!isCross(C,P)&&src!=='airMarshal'&&f(P)!==f(C)?'chg-row':null},el('td',{},el('span',{class:'mname'},n,info(src))),P?el('td',{class:'muted'},f(P)):null,el('td',{},f(C)))));
   app.append(el('section',{id:'rf-config'},el('div',{class:'sec-head'},el('h2',{},'RF configuration'),el('p',{class:'muted small'},'Channel, width and power of every radio, read when the snapshot was taken.')),
     callout(calloutRF(C,P)),

@@ -472,7 +472,7 @@ def snapshot(m, args):
         radios = radio_map_org(bss[s]) if s in bss else radio_map(per.get(s))
         snap["aps"].append({
             "serial": s, "name": d.get("name") or s, "model": d.get("model"),
-            "firmware": d.get("firmware"), "radios": radios, "address": d.get("address") or None,
+            "firmware": d.get("firmware"), "radios": radios, "address": d.get("address") or None, "mac": d.get("mac"),
             "rfProfileId": rfa.get(s, {}).get("id"), "rfProfile": rfa.get(s, {}).get("name"),
         })
     stmap = {x["serial"]: x for x in R["statuses"]}

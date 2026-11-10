@@ -53,7 +53,7 @@ Each snapshot saves two files in the `snapshots` folder:
 2. **Overview tiles**: infrastructure (APs, RADIUS, AI-RRM, Air Marshal), then the key client-experience numbers. Click a tile for its review guide.
 3. **Scorecard**: every metric with its daily trend. Click a row for the clients, radios or networks behind it.
 4. Then a client's experience in order: **Problematic clients** (who has problems and what to do, then where joins fail and which APs log the events), **Roaming**, **Where clients connect** and **By band**.
-5. Then the RF underneath: **Radio utilization** and **RF configuration**, and finally **Sources and method**.
+5. Then the RF underneath: **Radio utilization**, **RF spectrum** and **RF configuration**, and finally **Sources and method**.
 
 A bar of section links stays at the top of the page as you scroll.
 
@@ -87,11 +87,11 @@ Every figure in a report comes from these calls. The same list is shown in the a
 | RF configuration | `GET /networks/{networkId}/wireless/rfProfiles` | Band steering, minimum bitrates, channel widths and flex-radio settings. | RF configuration | Current | 1 |
 | RF configuration | `GET /organizations/{organizationId}/wireless/radio/rrm/byNetwork` | AutoRF settings: whether AI-RRM is on and when it was enabled, FRA, busy-hour behaviour, channel avoidance. | AI-RRM tile, RF configuration | Current | 1 |
 | RF configuration | `GET /organizations/{organizationId}/wireless/radio/overrides/byDevice` | Radios with a manually fixed channel, power or channel width. These are outside AI-RRM's control even when it's on. | AI-RRM tile | Current | 1+ (pages of 100) |
-| RF configuration | `GET /networks/{networkId}/wireless/airMarshal` | Other networks your APs hear, with signal strength. | Air Marshal tile, Strong neighbouring networks | 31 days (last 7 days used) | 1 |
+| RF configuration | `GET /networks/{networkId}/wireless/airMarshal` | Other networks your APs hear, with signal strength. | Air Marshal tile, RF spectrum, Strong neighbouring networks | 31 days (last 7 days used) | 1 |
 | RF configuration | `GET /organizations/{organizationId}/wireless/airMarshal/settings/byNetwork` | Air Marshal default policy (block or allow clients joining rogue SSIDs) and the scheduled scan setting. | Air Marshal tile | Current | 1 |
 | RF configuration | `GET /organizations/{organizationId}/wireless/airMarshal/rules` | Air Marshal allow, block and alert rules that apply to this network. | Air Marshal tile | Current | 1 |
 | RF configuration | `GET /networks/{networkId}/wireless/ssids` | Enabled SSIDs, their security mode and RADIUS servers. | RADIUS servers tile | Current | 1 |
-| Radio utilization | `GET /networks/{networkId}/networkHealth/channelUtilization` | How busy every radio is, in 10-minute samples, including non-Wi-Fi interference. Each 5 GHz radio on dual-5 GHz APs separately. | Busiest radio tile, radio utilization, scorecard | 14 days (Meraki refuses older 10-minute data) | 2 (7-day pages) |
+| Radio utilization | `GET /networks/{networkId}/networkHealth/channelUtilization` | How busy every radio is, in 10-minute samples, split into 802.11 (Wi-Fi) airtime and non-Wi-Fi interference. Each 5 GHz radio on dual-5 GHz APs separately. | Busiest radio tile, radio utilization, RF spectrum, scorecard | 14 days (Meraki refuses older 10-minute data) | 2 (7-day pages) |
 | Clients and traffic | `GET /networks/{networkId}/wireless/clientCountHistory` | Clients per day, for the whole network, each band, and each AP and band. | Clients per day, band share, clients per radio | 31 days | 4 + N×B |
 | Clients and traffic | `GET /networks/{networkId}/wireless/usageHistory` | Traffic per day for each AP and band. | Traffic per day, by band | 31 days | N × B |
 | Clients and traffic | `GET /networks/{networkId}/wireless/signalQualityHistory` | Client signal-to-noise (SNR) per day for each AP and band. | Weakest client signal, by band | 31 days | N × B |
@@ -124,6 +124,8 @@ Wireless event types read from the event log: `disassociation`, `wpa_deauth`, `8
 | Slow voice packets | Voice samples in Meraki's 32 ms-or-slower buckets ÷ all voice samples | `wireless/latencyStats` |
 | Upstream packet loss | Packets lost ÷ packets sent, client to AP, all APs | `wireless/devices/packetLoss/byDevice` |
 | Busiest 2.4 / 5 / 6 GHz radio | The highest 95th percentile of 10-minute utilization among that band's radios | `networkHealth/channelUtilization` |
+| 802.11 vs non-Wi-Fi (RF spectrum) | Meraki splits every 10-minute utilization sample into `wifi` (802.11 frames from any network on the channel: your clients and APs, beacons, retries and neighbours) and `non_wifi` (energy that isn't Wi-Fi: microwaves, Bluetooth, cordless phones, video senders, radar). Average and 95th percentile of each, per radio and per day. The channel map draws each radio across its full channel width; radios whose channels overlap share the block side by side. Neighbouring networks per channel come from Air Marshal and are drawn 20 MHz wide on their primary channel. It's a channel map from 10-minute averages, not a live spectrum analyser: Meraki's live FFT and waterfall (Dashboard: Wireless › RF spectrum) aren't in the API | `networkHealth/channelUtilization`, `wireless/airMarshal` |
+| Band buttons (Where clients connect) | Each band's share of connection attempts (successes + failures) from `wireless/connectionStats` per band. A client that tries more than one band counts on each, so bands add up to more than the all-band total. With one SSID picked, the share of that SSID's successful connections instead | `wireless/connectionStats`, `clients/{clientId}/connectivityEvents` |
 | Clients a day per radio | Unique clients per day on that AP and band, averaged over the period. Meraki counts per AP and band, so an AP with two 5 GHz radios shows one figure for both. Click a radio for the clients that connected to it (matched by AP, band and channel from connection events) and its client signal, traffic, busiest hour and neighbours on its channel | `wireless/clientCountHistory`, `clients/{clientId}/connectivityEvents` |
 | Non-Wi-Fi interference | The highest 95th percentile of non-Wi-Fi utilization on any radio | `networkHealth/channelUtilization` |
 | Weakest client signal | The lowest average client SNR of any AP and band | `wireless/signalQualityHistory` |

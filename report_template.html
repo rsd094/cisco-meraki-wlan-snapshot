@@ -159,7 +159,7 @@ input[type=file]{display:none}
 .pc-btns{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:6px}
 tr.pc-same td{opacity:.7}
 .bandbtns{gap:8px;margin:0}
-.bandbtn{flex-direction:column;align-items:flex-start;gap:1px;border-radius:10px;padding:8px 14px;min-width:150px}
+.qchip.bandbtn{flex-direction:column;align-items:center;text-align:center;gap:1px;border-radius:12px;padding:8px 16px;min-width:150px;white-space:nowrap}
 .bandbtn .bb-l{font-weight:650;font-size:14px}.bandbtn .bb-n{font-size:20px;font-weight:650;font-variant-numeric:tabular-nums}.bandbtn .bb-s{font-size:11px;color:var(--muted)}
 .cbfilters{display:flex;flex-wrap:wrap;gap:12px;align-items:center}
 .cbfilters label{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:6px}
@@ -292,6 +292,28 @@ section,details{scroll-margin-top:52px}
 .rstat{border:1px solid var(--line);border-radius:8px;padding:8px 10px}.rstat .k{font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted)}.rstat .v{font-size:20px;font-weight:600}
 #radios .sc-wrap.open .opt{display:none}
 @media print{#radios .opt{display:table-cell!important}}
+
+:root{--nw:#c2417a;--nbc:#8a938e}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--nw:#f07aa8;--nbc:#9ba59f}}
+:root[data-theme="dark"]{--nw:#f07aa8;--nbc:#9ba59f}
+.spec{width:100%;height:auto;display:block;margin-top:8px}
+.sp-grid{stroke:var(--line);stroke-width:1}.sp-tick{stroke:var(--faint)}
+.sp-ax{fill:var(--muted);font-size:11px}.sp-axn{fill:var(--nbc)}
+.sp-dfs{fill:var(--soft);opacity:.7}.sp-gap{fill:var(--soft);opacity:.35}.sp-shl{fill:var(--faint);font-size:10px}
+.sp-nball{fill:var(--nbc);opacity:.18}.sp-nbstrong{fill:var(--nbc);opacity:.45}
+.sp-wifi{fill:var(--accent);opacity:.85}.sp-non{fill:var(--nw)}.sp-p95{stroke:var(--fg);stroke-width:2;stroke-dasharray:4 3}
+.sp-hit{fill:transparent;cursor:pointer}.sp-lab{fill:var(--fg);font-size:11px;font-weight:600;pointer-events:none}
+.sp-radio.dim{opacity:.3}.sp-radio.on .sp-wifi{opacity:1}.sp-radio:focus{outline:none}.sp-radio:focus .sp-hit{stroke:var(--accent);stroke-width:2}
+.sp-legend{display:flex;flex-wrap:wrap;gap:6px 16px;align-items:center;font-size:12px;color:var(--muted);margin-top:6px}
+.sw{display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:6px;vertical-align:-2px}
+.sw.wifi{background:var(--accent)}.sw.non{background:var(--nw)}.sw.nb{background:var(--nbc);opacity:.5}.sw.p95{height:0;border-top:2px dashed var(--fg);border-radius:0}
+.sp-defs{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px}.sp-defs p{margin-top:4px}
+@media (max-width:700px){.sp-defs{grid-template-columns:1fr}}
+.sp-bar{display:flex;height:10px;background:var(--soft);border-radius:5px;overflow:hidden}.sp-bar .wifi{background:var(--accent)}.sp-bar .non{background:var(--nw)}
+.sp-days{display:flex;gap:6px;align-items:flex-end;overflow-x:auto;padding:8px 0}
+.sp-day{flex:1 0 34px;display:flex;flex-direction:column;align-items:center;gap:4px}
+.sp-day .stack{height:120px;width:100%;max-width:36px;display:flex;flex-direction:column;justify-content:flex-end;background:var(--soft);border-radius:4px;overflow:hidden}
+.sp-day .wifi{background:var(--accent);display:block}.sp-day .non{background:var(--nw);display:block}
 </style>
 </head>
 <body>
@@ -494,7 +516,7 @@ function miniTable(o){
   return el('div',{class:'mini',id:o.id},el('div',{class:'drow'},chips,search,count),
     el('div',{class:'tbl-wrap mini-scroll'},el('table',{class:'dtable'},el('thead',{},el('tr',{},o.cols.map(c=>el('th',{class:c.num?'num':null,style:'padding:6px 8px'},c.l)))),body)));
 }
-const SECTION_NAME={'client-bands':'Where clients connect','problem-clients':'Problematic clients',radios:'Radio utilization',band:'By band',roaming:'Roaming',scorecard:'Scorecard'};
+const SECTION_NAME={spectrum:'RF spectrum','client-bands':'Where clients connect','problem-clients':'Problematic clients',radios:'Radio utilization',band:'By band',roaming:'Roaming',scorecard:'Scorecard'};
 function goTo(id){const e=document.getElementById(id);if(!e)return;e.scrollIntoView({behavior:'smooth',block:'start'});e.classList.remove('flash');void e.offsetWidth;e.classList.add('flash')}
 function guideActions(t,m,C){
   const sec=SECTION_NAME[t.jump]||'detail', d=m&&m.id?drillDef(m.id,C):null;
@@ -599,7 +621,7 @@ function calloutIssues(C,P){
 const callout=(lines,title)=>el('div',{class:'callout'},el('b',{},title||'What this shows'),lines.length>1?el('ul',{},lines.map(l=>el('li',{},l))):el('p',{style:'margin-top:4px'},lines[0]||''));
 
 /* ---------- scorecard drill-down panels ---------- */
-let drill=null, drillSort=null, drillQ='', rBand='all', rAp='all', rSel=null, rQ='';
+let drill=null, drillSort=null, drillQ='', rBand='all', rAp='all', rSel=null, rQ='', spBand=null, spSel=null;
 let panelW=null;try{panelW=+localStorage.getItem('wlan-snapshot-panel-w')||null}catch(e){}
 function resizer(){
   const h=el('div',{class:'rz',role:'separator','aria-orientation':'vertical','aria-label':'Resize detail panel. Drag, or use the arrow keys. Double-click to reset.',tabindex:'0'});
@@ -835,7 +857,7 @@ function render(){
         el('button',{type:'button',onclick:exportPdf,title:'Open the print dialog; choose Save as PDF'},'PDF')),
       loadErr?el('span',{class:'err'},loadErr):null),
     seg),
-    el('nav',{class:'secnav','aria-label':'Sections'},[['overview','Overview'],['scorecard','Scorecard'],['problem-clients','Problematic clients'],['roaming','Roaming'],['client-bands','Where clients connect'],['band','By band'],['radios','Radio utilization'],['rf-config','RF configuration'],['sources','Sources']]
+    el('nav',{class:'secnav','aria-label':'Sections'},[['overview','Overview'],['scorecard','Scorecard'],['problem-clients','Problematic clients'],['roaming','Roaming'],['client-bands','Where clients connect'],['band','By band'],['radios','Radio utilization'],['spectrum','RF spectrum'],['rf-config','RF configuration'],['sources','Sources']]
       .map(([id,l])=>el('a',{href:'#'+id,onclick:e=>{e.preventDefault();if(id==='sources')document.getElementById('sources').open=true;goTo(id)}},l))));
 
   /* header */
@@ -1214,10 +1236,130 @@ function render(){
      el('div',{class:'sc-wrap'+(rSel?' open':''),style:rSel&&panelW?'--pw:'+panelW+'px':null},table,rSel?resizer():null,panel)));
   }
 
+  /* RF spectrum: each band as a channel map. Your radios are drawn across their full channel width,
+     split into 802.11 airtime and non-Wi-Fi interference; neighbouring networks from Air Marshal sit underneath. */
+  {const SV='http://www.w3.org/2000/svg';
+   const sv=(tag,a,...kids)=>{const n=document.createElementNS(SV,tag);for(const[k,v]of Object.entries(a||{}))if(v!=null)n.setAttribute(k,v);for(const c of kids.flat())if(c!=null)n.append(c.nodeType?c:document.createTextNode(String(c)));return n};
+   const RAD=(C.radios||[]).map(r=>({...r,wifiAvg:r.wifiAvg??(r.avg!=null&&r.nonWifiAvg!=null?Math.max(0,r.avg-r.nonWifiAvg):null)}));
+   const bandsHere=['2.4','5','6'].filter(b=>RAD.some(r=>r.band===b));
+   if(!spBand||!bandsHere.includes(spBand))spBand=bandsHere[0]||'2.4';
+   const keyOf=r=>r.serial+'|'+r.radio;
+   if(spSel&&!RAD.some(r=>keyOf(r)===spSel))spSel=null;
+   const BAND={'2.4':{lo:2400,hi:2484,f:c=>c===14?2484:2407+5*c,ticks:[1,2,3,4,5,6,7,8,9,10,11,12,13]},
+     '5':{lo:5150,hi:5895,f:c=>5000+5*c,ticks:[36,44,52,60,100,108,116,124,132,140,149,157,165,173],
+       shade:[[5250,5350,'DFS'],[5350,5470,'not used'],[5470,5730,'DFS']]},
+     '6':{lo:5925,hi:7125,f:c=>5950+5*c,ticks:Array.from({length:15},(_,i)=>5+16*i)}};
+   const B5={40:[36,44,52,60,100,108,116,124,132,140,149,157,165,173],80:[36,52,100,116,132,149,165],160:[36,100,149]};
+   const mhz=r=>parseInt(String(r.width||'20'))||20;
+   const span=r=>{const b=BAND[r.band],w=mhz(r),c=r.channel;if(c==null)return null;
+     if(r.band==='2.4'||w<=20)return[b.f(c)-10,b.f(c)-10+Math.max(20,r.band==='2.4'?20:w)];
+     if(r.band==='5'){const s=(B5[w]||[]).filter(x=>x<=c).pop();const st=s!=null&&c<s+w/5?s:c;return[b.f(st)-10,b.f(st)-10+w]}
+     const n=w/20,st=1+Math.floor((c-1)/(4*n))*4*n;return[b.f(st)-10,b.f(st)-10+w]};
+   const NB=(C.neighbors||{}).byChannel||[],CO=(C.neighbors||{}).coChannel||[];
+   const coOf=r=>CO.find(x=>x.serial===r.serial&&String(x.band)===String(r.band)&&x.channel===r.channel);
+   const rows=RAD.filter(r=>r.band===spBand).sort((a,b)=>(b.avg||0)-(a.avg||0));
+   const pick=k=>{spSel=spSel===k?null:k;render();setTimeout(()=>goTo('spectrum'),30)};
+
+   /* chart */
+   const bd=BAND[spBand],W=1000,Hh=300,L=46,R=46,T=26,Bm=44,pw=W-L-R,ph=Hh-T-Bm;
+   const x=f=>L+(f-bd.lo)/(bd.hi-bd.lo)*pw;
+   const yMax=Math.max(10,Math.ceil(Math.max(0,...rows.map(r=>r.p95||0))/10)*10);
+   const y=v=>T+ph-(v/yMax)*ph;
+   const nbs=NB.filter(n=>n.band===spBand&&bd.f(n.channel)>=bd.lo&&bd.f(n.channel)<=bd.hi);
+   const nMax=Math.max(1,...nbs.map(n=>n.nets));
+   const yn=v=>T+ph-(v/nMax)*ph*0.92;
+   const g=sv('svg',{viewBox:`0 0 ${W} ${Hh}`,class:'spec',role:'img','aria-label':`${band(spBand)} channel map: your radios and neighbouring networks`});
+   for(const[a,b,l]of bd.shade||[])g.append(sv('rect',{x:x(a),y:T,width:x(b)-x(a),height:ph,class:l==='DFS'?'sp-dfs':'sp-gap'}),sv('text',{x:(x(a)+x(b))/2,y:T+12,class:'sp-shl','text-anchor':'middle'},l));
+   for(let v=0;v<=yMax;v+=yMax/5){g.append(sv('line',{x1:L,x2:W-R,y1:y(v),y2:y(v),class:'sp-grid'}),sv('text',{x:L-6,y:y(v)+4,class:'sp-ax','text-anchor':'end'},nf(v,0)+'%'))}
+   for(let i=0;i<=4;i++){const v=nMax*i/4;g.append(sv('text',{x:W-R+6,y:yn(v)+4,class:'sp-ax sp-axn'},nf(v,0)))}
+   for(const c of bd.ticks){const fx=x(bd.f(c));if(fx<L||fx>W-R)continue;g.append(sv('line',{x1:fx,x2:fx,y1:T+ph,y2:T+ph+5,class:'sp-tick'}),sv('text',{x:fx,y:T+ph+18,class:'sp-ax','text-anchor':'middle'},c))}
+   g.append(sv('text',{x:L+pw/2,y:Hh-6,class:'sp-ax','text-anchor':'middle'},`${band(spBand)} channel (${bd.lo}–${bd.hi} MHz)`));
+   g.append(sv('text',{x:12,y:T+ph/2,class:'sp-ax','text-anchor':'middle',transform:`rotate(-90 12 ${T+ph/2})`},'Airtime used'));
+   g.append(sv('text',{x:W-10,y:T+ph/2,class:'sp-ax sp-axn','text-anchor':'middle',transform:`rotate(90 ${W-10} ${T+ph/2})`},'Neighbouring networks'));
+   for(const n of nbs){const fc=bd.f(n.channel),a=x(fc-10),b=x(fc+10),m=x(fc);
+     const hump=v=>`M${a},${T+ph} Q${m},${2*yn(v)-(T+ph)} ${b},${T+ph} Z`;
+     g.append(sv('g',{class:'sp-nb'},sv('path',{d:hump(n.nets),class:'sp-nball'}),n.strong?sv('path',{d:hump(n.strong),class:'sp-nbstrong'}):null,
+       sv('title',{},`Channel ${n.channel}: ${nf(n.nets,0)} neighbouring networks heard, ${nf(n.strong,0)} strong (25 dB or more)`)))}
+   /* radios whose channels overlap share the block side by side, so neither hides the other */
+   const lanes=new Map();
+   for(const r of rows){const s=span(r);if(!s)continue;const grp=rows.filter(o=>{const q=span(o);return q&&q[0]<s[1]&&s[0]<q[1]});lanes.set(keyOf(r),{i:grp.indexOf(r),n:grp.length,with:grp.filter(o=>o!==r)})}
+   rows.forEach((r,i)=>{const s=span(r);if(!s)return;const ln=lanes.get(keyOf(r)),a0=x(Math.max(bd.lo,s[0])),b0=x(Math.min(bd.hi,s[1])),lw=(b0-a0)/ln.n,a=a0+lw*ln.i,b=a+lw,wd=Math.max(3,b-a-2),k=keyOf(r),on=spSel===k,dim=spSel&&!on;
+     const wv=r.wifiAvg||0,nv=r.nonWifiAvg||0,co=coOf(r);
+     const grp=sv('g',{class:'sp-radio'+(on?' on':'')+(dim?' dim':''),tabindex:'0',role:'button','aria-label':`${r.ap} ${band(r.band)} channel ${r.channel}`},
+       sv('rect',{x:a+1,y:y(wv),width:wd,height:Math.max(0,y(0)-y(wv)),class:'sp-wifi'}),
+       sv('rect',{x:a+1,y:y(wv+nv),width:wd,height:Math.max(0,y(wv)-y(wv+nv)),class:'sp-non'}),
+       r.p95!=null?sv('line',{x1:a+1,x2:a+1+wd,y1:y(r.p95),y2:y(r.p95),class:'sp-p95'}):null,
+       sv('rect',{x:a+1,y:T,width:wd,height:ph,class:'sp-hit'}),
+       sv('text',{x:a+1+wd/2,y:Math.max(T+10,y(Math.max(r.p95||0,wv+nv))-6-12*(i%3)),class:'sp-lab','text-anchor':'middle'},`${r.ap} · ch ${r.channel}`),
+       sv('title',{},`${r.ap} · ${band(r.band)} channel ${r.channel} · ${r.width||''}\n802.11 airtime: ${nf(wv,1)}% average\nNon-Wi-Fi interference: ${nf(nv,1)}% average\nTotal at peak (p95): ${nf(r.p95,0)}%`+(co?`\nNeighbours on its channel: ${nf(co.nets,0)} (${nf(co.strong,0)} strong)`:'')+(ln.with.length?`\nShares airtime with your own ${ln.with.map(o=>`${o.ap} ch ${o.channel}`).join(', ')}: their channels overlap`:'')));
+     grp.addEventListener('click',()=>pick(k));grp.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();pick(k)}});
+     g.append(grp)});
+   const tabs=el('div',{class:'qchips',role:'group','aria-label':'Band'},bandsHere.map(b=>el('button',{type:'button',class:'qchip','aria-pressed':String(spBand===b),onclick:()=>{spBand=b;spSel=null;render();goTo('spectrum')}},band(b),el('span',{class:'qn'},nf(RAD.filter(r=>r.band===b).length,0)))));
+   const legend=el('div',{class:'sp-legend'},el('span',{class:'sw wifi'}),'802.11 (Wi-Fi) airtime, average',el('span',{class:'sw non'}),'Non-Wi-Fi interference, average',el('span',{class:'sw p95'}),'Total at peak (p95)',el('span',{class:'sw nb'}),'Neighbouring networks per channel (right axis; darker = strong)');
+
+   /* breakdown table */
+   const pOf=r=>P&&!isCross(C,P)?(P.radios||[]).find(o=>o.serial===r.serial&&o.radio===r.radio):null;
+   const pw_=o=>o?(o.wifiAvg??(o.avg!=null&&o.nonWifiAvg!=null?Math.max(0,o.avg-o.nonWifiAvg):null)):null;
+   const cmp=(a,b,d)=>b==null||a==null?(a==null?'—':nf(a,d)+'%'):el('span',{},el('span',{class:'muted'},nf(b,d)),' → ',el('span',{class:'delta '+(Math.abs(a-b)<1?'same':a<b?'good':'bad')},nf(a,d)+'%'));
+   const barMax=Math.max(1,...rows.map(r=>(r.wifiAvg||0)+(r.nonWifiAvg||0)));
+   const tb=el('tbody',{},rows.map(r=>{const k=keyOf(r),o=pOf(r),tot=(r.wifiAvg||0)+(r.nonWifiAvg||0),share=tot?100*(r.nonWifiAvg||0)/tot:null,co=coOf(r),on=spSel===k;
+     return el('tr',{class:'drill'+(on?' on':''),tabindex:'0',role:'button','aria-expanded':String(on),onclick:e=>{if(e.target.closest('.i'))return;pick(k)},onkeydown:e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();pick(k)}}},
+       el('td',{},el('div',{style:'white-space:nowrap'},el('b',{},r.ap)),el('div',{class:'muted small'},`channel ${r.channel} · ${r.width||''}`)),
+       el('td',{class:'num'},cmp(r.wifiAvg,pw_(o),1)),el('td',{class:'num'},cmp(r.nonWifiAvg,o?o.nonWifiAvg:null,1)),
+       el('td',{class:'num'},share==null?'—':nf(share,0)+'%'),
+       el('td',{class:'num'},r.wifiP95==null?'—':nf(r.wifiP95,0)+'%'),el('td',{class:'num'},r.nonWifiP95==null?'—':nf(r.nonWifiP95,0)+'%'),
+       el('td',{style:'min-width:140px'},el('div',{class:'sp-bar',title:`802.11 ${nf(r.wifiAvg,1)}% · non-Wi-Fi ${nf(r.nonWifiAvg,1)}%`},el('span',{class:'wifi',style:`width:${100*(r.wifiAvg||0)/barMax}%`}),el('span',{class:'non',style:`width:${100*(r.nonWifiAvg||0)/barMax}%`}))),
+       el('td',{class:'num'},co?el('span',{},nf(co.nets,0),co.strong?el('span',{class:'muted small'},` · ${co.strong} strong`):null):'—'))}));
+   const tbl=el('div',{class:'tbl-wrap'},el('table',{},el('thead',{},el('tr',{},
+     el('th',{},'Radio'),
+     el('th',{class:'num'},'802.11 avg',info('radioUtil','Average share of time the channel was busy with Wi-Fi frames: your APs and clients, neighbouring networks on the same or overlapping channel, beacons, management frames and retries.')),
+     el('th',{class:'num'},'Non-Wi-Fi avg',info('radioUtil','Average share of time the channel was busy with energy that isn’t Wi-Fi: microwave ovens, Bluetooth, cordless phones, video senders, wireless cameras and, on 5 GHz, radar.')),
+     el('th',{class:'num'},'Interference share',info([],'Non-Wi-Fi as a share of all the airtime used on that radio. High share with low totals is harmless; high share with high totals means interference is costing real capacity.')),
+     el('th',{class:'num'},'802.11 p95',info('radioUtil','95th percentile of the 10-minute 802.11 samples: Wi-Fi keeps the channel below this busy 95% of the time.')),
+     el('th',{class:'num'},'Non-Wi-Fi p95',info('radioUtil','95th percentile of the 10-minute non-Wi-Fi samples: interference stays below this 95% of the time.')),
+     el('th',{},'Split',info([],'Average airtime split into 802.11 (blue) and non-Wi-Fi (pink). Bars share one scale within the band.')),
+     el('th',{class:'num'},'Neighbours on channel',info('airMarshal','Other networks this AP heard on a channel inside this radio’s channel width, last 7 days. Strong = 25 dB or more.')))),tb));
+
+   /* one radio over time */
+   let daily=null;
+   if(spSel){const r=RAD.find(z=>keyOf(z)===spSel),ds=r.dailySplit;
+     if(ds&&ds.length){const mx=Math.max(1,...ds.map(d=>(d[1]||0)+(d[2]||0)));
+       daily=el('div',{class:'card'},el('div',{class:'dpanel-h'},el('h3',{},`${r.ap} · ${band(r.band)} ch ${r.channel}: 802.11 and interference by day`,info('radioUtil')),el('button',{type:'button',class:'x','aria-label':'Close',onclick:()=>{spSel=null;render()}},'×')),
+         el('div',{class:'sp-days'},ds.map(d=>el('div',{class:'sp-day',title:`${fds(d[0])}: 802.11 ${nf(d[1],1)}% · non-Wi-Fi ${nf(d[2],1)}%`},
+           el('div',{class:'stack'},el('span',{class:'non',style:`height:${100*(d[2]||0)/mx}%`}),el('span',{class:'wifi',style:`height:${100*(d[1]||0)/mx}%`})),el('div',{class:'muted small'},fds(d[0]).replace(/ \w+$/,''))))),
+         el('p',{class:'muted small'},`Daily average airtime, 0–${nf(mx,0)}% scale. A day where pink jumps while blue stays flat points to an interference source that switched on, not more Wi-Fi traffic.`))}
+     else daily=el('div',{class:'callout'},el('p',{},'Daily 802.11 and interference detail was added after this snapshot was taken. Take a new snapshot to see it.'))}
+
+   /* callout */
+   const lines=[];
+   const sw=RAD.reduce((t,r)=>t+(r.wifiAvg||0),0),sn=RAD.reduce((t,r)=>t+(r.nonWifiAvg||0),0);
+   if(sw+sn)lines.push(`Across all ${RAD.length} radios, ${nf(100*sw/(sw+sn),0)}% of the airtime used is 802.11 (Wi-Fi) and ${nf(100*sn/(sw+sn),0)}% is non-Wi-Fi interference.`);
+   const wi=RAD.filter(r=>r.nonWifiP95!=null).sort((a,b)=>b.nonWifiP95-a.nonWifiP95)[0];
+   if(wi)lines.push(wi.nonWifiP95<5?`Interference is low: no radio loses more than ${nf(wi.nonWifiP95,0)}% of its airtime to non-Wi-Fi sources even at peak (highest: ${wi.ap}, ${band(wi.band)} ch ${wi.channel}).`:
+     `${wi.ap} on ${band(wi.band)} ch ${wi.channel} loses up to ${nf(wi.nonWifiP95,0)}% of its airtime to non-Wi-Fi interference at peak. Look for a nearby microwave, video sender, Bluetooth-heavy area or wireless camera, or move the radio to another channel.`);
+   const bw=RAD.filter(r=>(r.wifiAvg||0)>=20).sort((a,b)=>b.wifiAvg-a.wifiAvg)[0];
+   if(bw){const co=coOf(bw),ab=get(C,['apBand',bw.serial,String(bw.band)])||{};
+     lines.push(`${bw.ap} ${band(bw.band)} ch ${bw.channel} is busy with Wi-Fi itself (${nf(bw.wifiAvg,0)}% average)`+(co?`: ${nf(co.nets,0)} neighbouring networks share its channel`:'')+(ab.gbPerDay!=null?` while it carries ${nf(ab.gbPerDay,1)} GB a day for ${nf(ab.clientsPerDay,0)} clients`:'')+'. Meraki doesn’t split your own Wi-Fi from your neighbours’, so compare it with your own traffic.')}
+   {const seen=new Set();for(const r of RAD){const s=span(r);if(!s)continue;for(const o of RAD){if(o===r||o.band!==r.band||o.serial===r.serial)continue;const q=span(o);if(!q||!(q[0]<s[1]&&s[0]<q[1]))continue;
+      const id=[keyOf(r),keyOf(o)].sort().join();if(seen.has(id))continue;seen.add(id);
+      lines.push(`${r.ap} ch ${r.channel} and ${o.ap} ch ${o.channel} (${band(r.band)}) overlap at their current widths, so they share airtime. That is fine while both are quiet; if either gets busy, AI-RRM or a narrower width can separate them.`)}}}
+   lines.push('This is a channel map built from 10-minute averages, not a live spectrum analyser. For live FFT, waterfall and duty-cycle views, use Dashboard: Wireless › RF spectrum, which the Meraki API doesn’t expose.');
+
+   app.append(el('section',{id:'spectrum'},el('div',{class:'sec-head'},el('h2',{},'RF spectrum'),el('p',{class:'muted small'},'Where each radio sits in the band, how much of its airtime goes to 802.11 traffic versus non-Wi-Fi interference, and how crowded each channel is with neighbouring networks. Click a radio for its daily split.')),
+     callout(lines),
+     el('div',{class:'card'},el('div',{class:'sec-row'},el('h3',{},`${band(spBand)} channel map`,info(['radioUtil','airMarshal'],'Your radios: average airtime over the period, drawn across their full channel width. Neighbouring networks: Air Marshal, last 7 days, drawn 20 MHz wide on their primary channel.')),tabs),
+       g,legend,
+       el('div',{class:'sp-defs'},
+         el('div',{},el('b',{},el('span',{class:'sw wifi'}),'802.11 (Wi-Fi) airtime'),el('p',{class:'muted small'},'Time the channel carried Wi-Fi frames: data to and from your clients, your APs’ beacons and management frames, retries, and neighbouring networks on the same or an overlapping channel. All Wi-Fi shares the channel, so neighbours reduce your capacity too.')),
+         el('div',{},el('b',{},el('span',{class:'sw non'}),'Non-Wi-Fi interference'),el('p',{class:'muted small'},'Energy on the channel that isn’t Wi-Fi: microwave ovens and Bluetooth (2.4 GHz), cordless phones, video senders, wireless cameras, and radar on 5 GHz DFS channels. It blocks the channel without carrying any of your traffic.')))),
+     el('div',{class:'card'},el('h3',{},`${band(spBand)} radios: 802.11 vs interference`),P&&isCross(C,P)?el('p',{class:'muted small'},`Showing ${C.network} only; APs differ between networks.`):null,tbl),
+     daily));
+  }
+
   /* where clients connect: band buttons, SSID and radio drop-downs, radios and clients */
   {const CC=C.clientConns,SN=C.ssidNames||{};
    const sec=el('section',{id:'client-bands'},el('div',{class:'sec-head'},el('h2',{},'Where clients connect'),
-     el('p',{class:'muted small'},'Which bands, radios and SSIDs clients join, counted from every successful connection in this period. Pick a band, SSID or radio to narrow everything below.')));
+     el('p',{class:'muted small'},'Which bands, radios and SSIDs clients join. The band buttons show where connection attempts go; the tables below list the successful connections behind them. Pick a band, SSID or radio to narrow everything below.')));
    if(!CC){sec.append(el('div',{class:'callout'},el('p',{},'This snapshot was taken before connection detail was added. Take a new snapshot to see it.')));app.append(sec)}
    else{
     const ssidName=n=>SN[String(n)]||(n==null?'—':'SSID '+n);
@@ -1229,8 +1371,18 @@ function render(){
     const bands=['2.4','5','6'],allClients=uniq(base);
     const btns=el('div',{class:'qchips bandbtns',role:'group','aria-label':'Band'},[['all','All bands']].concat(bands.map(b=>[b,band(b)])).map(([k,l])=>{
       const rows=k==='all'?base:base.filter(r=>r.band===k),n=uniq(rows),conns=rows.reduce((t,r)=>t+r.n,0);
-      return el('button',{type:'button',class:'qchip bandbtn','aria-pressed':String(cbBand===k),disabled:n||k==='all'?null:'',onclick:()=>{cbBand=k;cbRadio='all';render();goTo('client-bands')}},
-        el('span',{class:'bb-l'},l),el('span',{class:'bb-n'},`${n} client${n===1?'':'s'}`),el('span',{class:'bb-s'},k==='all'?`${nf(conns,0)} connections`:`${allClients?nf(100*n/allClients,0):0}% of clients · ${nf(conns,0)} connections`))}));
+      /* all SSIDs: Meraki's connection attempts per band (successes + failures); one SSID: that SSID's successful connections */
+      const att=x=>{const c=get(C,['connections',x])||{};return c.success!=null?(c.success||0)+(c.failures||0):null};
+      const useAtt=cbSsid==='all'&&bands.every(b=>att(b)!=null);
+      const totB=useAtt?bands.reduce((s,b)=>s+att(b),0):base.reduce((s,r)=>s+r.n,0);
+      const num=k==='all'?(useAtt?att('all'):conns):(useAtt?att(k):conns);
+      const ok=k!=='all'&&useAtt?get(C,['connections',k,'success']):null;
+      const big=k==='all'?nf(num,0):(totB?nf(100*num/totB,0):'0')+'%';
+      const sub=k==='all'?(useAtt?'connection attempts':'connections on this SSID'):useAtt?`${nf(num,0)} attempts · ${num?nf(100*ok/num,0):0}% succeeded`:`${nf(num,0)} connections`;
+      return el('button',{type:'button',class:'qchip bandbtn','aria-pressed':String(cbBand===k),disabled:n||k==='all'?null:'',
+        title:k==='all'?null:`${band(k)}: ${big} of ${useAtt?'connection attempts':'connections'} · ${n} client${n===1?'':'s'} (listed below)`,onclick:()=>{cbBand=k;cbRadio='all';render();goTo('client-bands')}},
+        el('span',{class:'bb-l'},l),el('span',{class:'bb-n'},big),el('span',{class:'bb-s'},sub))}));
+    const bbNote=el('p',{class:'muted small'},cbSsid==='all'?'Share of connection attempts (successful and failed) on each band, from Meraki’s connection stats. A client that tries more than one band is counted on each, so the bands add up to more than the all-band total. Pick a band to see the clients and radios below.':'Share of this SSID’s successful connections on each band. Pick a band to see the clients and radios below.');
     /* drop-downs */
     const ssids=[...new Set(CC.map(r=>String(r.ssid)))].sort((a,b)=>ssidName(a).localeCompare(ssidName(b)));
     const selS=el('select',{'aria-label':'SSID',onchange:e=>{cbSsid=e.target.value;cbRadio='all';render();goTo('client-bands')}},el('option',{value:'all',selected:cbSsid==='all'?'':null},'All SSIDs'),
@@ -1271,7 +1423,7 @@ function render(){
       byC.length?null:el('tr',{},el('td',{colspan:'6',class:'muted'},'No clients match these filters.')));
     const csearch=el('input',{type:'search',class:'dsearch',placeholder:'Find a client by name, MAC, maker or OS…','aria-label':'Find a client',value:cbQ,
       oninput:e=>{cbQ=e.target.value.trim().toLowerCase();const pos=e.target.selectionStart;render();const i=document.querySelector('#client-bands .dsearch');if(i){i.focus();i.setSelectionRange(pos,pos)}}});
-    sec.append(btns,el('div',{class:'cbfilters'},el('label',{},'SSID',selS),el('label',{},'Radio',selR),reset),callout(lines),
+    sec.append(btns,bbNote,el('div',{class:'cbfilters'},el('label',{},'SSID',selS),el('label',{},'Radio',selR),reset),callout(lines),
       el('div',{class:'grid cbgrid'},
         el('div',{class:'card'},el('h3',{},cbBand==='all'?'Radios by connections':`${band(cbBand)} radios by connections`,info('roaming','From each client’s connectivity events: every successful connection, with the AP, band, channel and SSID.')),
           el('p',{class:'muted small',style:'margin:4px 0 8px'},'Click a radio to list only its clients.'),el('div',{class:'tbl-wrap'},rtab)),
@@ -1403,7 +1555,7 @@ function render(){
 
   /* reading order: verdict and key numbers, then each stage of a client's experience
      (connect, stay connected and roam, which band and radio), then the RF underneath */
-  const ORDER=['overview','scorecard','problem-clients','roaming','client-bands','band','radios','rf-config'];
+  const ORDER=['overview','scorecard','problem-clients','roaming','client-bands','band','radios','spectrum','rf-config'];
   for(const id of ORDER){const s=app.querySelector('#'+CSS.escape(id));if(s)app.append(s)}
 
   /* sources */

@@ -96,15 +96,15 @@ ENDPOINTS = [
     {"area": "RF configuration", "path": "GET /organizations/{organizationId}/wireless/radio/overrides/byDevice", "use": "Radios with a manually fixed channel, power or channel width. These are outside AI-RRM's control even when it's on.",
      "shows": "AI-RRM tile", "lookback": "Current", "calls": "1+ (pages of 100)"},
     {"area": "RF configuration", "path": "GET /networks/{networkId}/wireless/airMarshal", "use": "Other networks your APs hear, with signal strength.",
-     "shows": "Air Marshal tile, Strong neighbouring networks", "lookback": "31 days (last 7 days used)", "calls": "1"},
+     "shows": "Air Marshal tile, RF spectrum, Strong neighbouring networks", "lookback": "31 days (last 7 days used)", "calls": "1"},
     {"area": "RF configuration", "path": "GET /organizations/{organizationId}/wireless/airMarshal/settings/byNetwork", "use": "Air Marshal default policy (block or allow clients joining rogue SSIDs) and the scheduled scan setting.",
      "shows": "Air Marshal tile", "lookback": "Current", "calls": "1"},
     {"area": "RF configuration", "path": "GET /organizations/{organizationId}/wireless/airMarshal/rules", "use": "Air Marshal allow, block and alert rules that apply to this network.",
      "shows": "Air Marshal tile", "lookback": "Current", "calls": "1"},
     {"area": "RF configuration", "path": "GET /networks/{networkId}/wireless/ssids", "use": "Enabled SSIDs, their security mode and RADIUS servers.",
      "shows": "RADIUS servers tile", "lookback": "Current", "calls": "1"},
-    {"area": "Radio utilization", "path": "GET /networks/{networkId}/networkHealth/channelUtilization", "use": "How busy every radio is, in 10-minute samples, including non-Wi-Fi interference. Each 5 GHz radio on dual-5 GHz APs separately.",
-     "shows": "Busiest radio tile, radio utilization, scorecard", "lookback": "14 days (Meraki refuses older 10-minute data)", "calls": "2 (7-day pages)"},
+    {"area": "Radio utilization", "path": "GET /networks/{networkId}/networkHealth/channelUtilization", "use": "How busy every radio is, in 10-minute samples, split into 802.11 (Wi-Fi) airtime and non-Wi-Fi interference. Each 5 GHz radio on dual-5 GHz APs separately.",
+     "shows": "Busiest radio tile, radio utilization, RF spectrum, scorecard", "lookback": "14 days (Meraki refuses older 10-minute data)", "calls": "2 (7-day pages)"},
     {"area": "Clients and traffic", "path": "GET /networks/{networkId}/wireless/clientCountHistory", "use": "Clients per day, for the whole network, each band, and each AP and band.",
      "shows": "Clients per day, band share, clients per radio", "lookback": "31 days", "calls": "4 + N×B"},
     {"area": "Clients and traffic", "path": "GET /networks/{networkId}/wireless/usageHistory", "use": "Traffic per day for each AP and band.",
@@ -647,6 +647,10 @@ def _radio_util(chunks_rows, aps, tz):
         ts = sorted(d)
         util = [d[t][0] for t in ts]
         nonw = [d[t][2] for t in ts]
+        wifi = [d[t][1] for t in ts]
+        dsplit = {}
+        for t in ts:
+            dsplit.setdefault(t[:10], []).append(d[t])
         hourly, daily = {}, {}
         for t in ts:
             hourly.setdefault(t[:13], []).append(d[t][0])
@@ -661,6 +665,9 @@ def _radio_util(chunks_rows, aps, tz):
             "samples": len(ts), "avg": rnd(mean(util)), "p95": rnd(pct(util, .95)), "max": rnd(max(u for u in util if u is not None)) if util else None,
             "nonWifiAvg": rnd(mean(nonw)), "nonWifiP95": rnd(pct(nonw, .95)), "nonWifiMax": rnd(max(n for n in nonw if n is not None)) if nonw else None,
             "busyHourAvg": rnd(max(mean(v) for v in hod.values())) if hod else None,
+            "wifiAvg": rnd(mean(wifi)), "wifiP95": rnd(pct(wifi, .95)),
+            "wifiMax": rnd(max(w for w in wifi if w is not None)) if any(w is not None for w in wifi) else None,
+            "dailySplit": [[k, rnd(mean([x[1] for x in v])), rnd(mean([x[2] for x in v]))] for k, v in sorted(dsplit.items())],
             "hourly": [[h, rnd(mean(v))] for h, v in sorted(hourly.items())],
             "dailyP95": [[k, rnd(pct(v, .95))] for k, v in sorted(daily.items())],
         }
@@ -824,7 +831,7 @@ def _neighbors(am, serials, radios=(), our_ssids=(), since=None):
             "contained": srt(contained)[:100], "containedCount": len(contained),
             "rogues": srt(rogues)[:50], "rogueCount": len(rogues), "spoofs": srt(spoofs)[:50], "spoofCount": len(spoofs),
             "open": srt(opn)[:50], "openCount": len(opn), "encryption": enc,
-            "byChannel": sorted(by_ch.values(), key=lambda b: (-b["nets"], b["channel"]))[:30],
+            "byChannel": sorted(by_ch.values(), key=lambda b: (-b["nets"], b["channel"])),
             "coChannel": sorted(co.values(), key=lambda r: (-r["strong"], -r["nets"])),
             "since": iso(since) if since else None,
             "note": "Strong = heard by one of your APs at 25 dB or more."}

@@ -174,14 +174,13 @@ These are built from Meraki's per-AP, per-radio and network averages, so they fo
 
 ### Network path
 
-How the APs connect to the rest of the network, from read-only calls: LLDP and CDP neighbours (`topology/linkLayer`), the MX's VLANs, each switch port's mode and VLANs, the site-to-site VPN and the MX's internet uplinks.
+How the APs connect to the rest of the network, from read-only calls: LLDP and CDP neighbours (`topology/linkLayer`), switch port names, the MX's VLANs (to tell whether a server is inside the site), the site-to-site VPN and the MX's internet uplinks.
 
-- **VLANs**: each MX VLAN's subnet and gateway, which SSIDs bridge onto it, whether the APs manage on it, and whether it's advertised to the site-to-site VPN.
 - **Topology**: every device LLDP or CDP sees, as a tree from the MX down, with the port each one uses to reach the device above it. Devices outside the network (for example another MX plugged into a switch) are marked.
-- **Path from an AP to the server**: pick an AP and an SSID. For an 802.1X SSID, *802.1X login* shows the RADIUS request: the client sends EAP to the AP, the AP sends RADIUS from its own management IP up each switch port (with that port's mode and VLANs) to the MX, then either stays on a local VLAN, goes through the VPN to the peer that advertises the server's subnet (with the tunnel's status), or goes out to the internet. *Client data* shows the client's own VLAN on the same path to its gateway.
-- Flagged: a RADIUS server reached through a VPN peer that isn't reachable, APs that connect through another AP rather than a switch, VLANs that carry both 802.1X and non-802.1X SSIDs, and devices outside the network.
+- **Path from an AP to the server**: pick an AP and an SSID and the path is drawn as a topology, left to right: client, AP, each switch, the MX, then the VPN peer and the server (or the internet). Wireless links are dashed, cables solid with the port number at each end, the VPN tunnel dashed green; each device and link carries a tick when it's online or reachable and a cross when it isn't. *802.1X login* follows the RADIUS request, which the AP sends from its own address; *Client data* follows the client's traffic to the internet.
+- Flagged: a RADIUS server reached through a VPN peer that isn't reachable, APs that connect through another AP rather than a switch, and devices outside the network.
 
-Limits: Meraki's API covers each hop up to the MX and the VPN tunnel's status, not the internet hops between sites. A server's own switch port isn't in LLDP, so a local server's last hop isn't shown. Switches from other vendors appear by name and port, without VLAN detail.
+Limits: Meraki's API covers each hop up to the MX and the VPN tunnel's status, not the internet hops between sites. A server's own switch port isn't in LLDP, so a local server's last hop isn't shown. Switches from other vendors appear by name and port only.
 
 ### How roams are classed
 

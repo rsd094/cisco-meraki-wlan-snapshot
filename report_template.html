@@ -1176,7 +1176,13 @@ function render(){
      el('div',{class:'legend',style:'margin:8px 0'},P&&!isCross(C,P)?el('span',{style:'--c:var(--base)'},`Baseline (${win(P)})`):null,el('span',{style:'--c:var(--accent)'},P&&!isCross(C,P)?`This snapshot (${win(C)})`:`${win(C)}`),
        el('span',{class:'nolegend'},`Trend lines: one point per hour over ${C.window.days} days, all on the same 0–${nf(hiAll,0)}% scale so radios compare at a glance. Click a radio for its clients.`)),
      filt,
-     el('div',{class:'tbl-wrap'},el('table',{},el('thead',{},el('tr',{},el('th',{},'Radio'),el('th',{class:'num'},'Clients a day'),el('th',{class:'num'},'Average'),el('th',{class:'num'},'Peak (p95)'),el('th',{class:'num opt'},'Max'),el('th',{class:'num opt'},'Non-Wi-Fi at peak'),el('th',{class:'opt'},`Trend over ${C.window.days} days`))),utb)));
+     el('div',{class:'tbl-wrap'},el('table',{},el('thead',{},el('tr',{},el('th',{},'Radio'),
+       el('th',{class:'num'},'Clients a day',info('clients','Unique clients that connected to this AP on this band each day, averaged over the period. Meraki counts per AP and band, so an AP with two 5 GHz radios shows the same figure on both.')),
+       el('th',{class:'num'},'Average',info('radioUtil','Average airtime utilization across every 10-minute sample in the period: the share of time the channel was busy, from your own clients, neighbouring networks and non-Wi-Fi interference together.')),
+       el('th',{class:'num'},'Peak (p95)',info('radioUtil','95th percentile of the 10-minute samples: the radio is below this 95% of the time. A steadier measure of busy periods than Max, because one short burst can’t set it.')),
+       el('th',{class:'num opt'},'Max',info('radioUtil','The single busiest 10-minute sample in the period. Often a one-off burst, such as a large download or a neighbour’s backup; look at Peak for how busy the radio usually gets.')),
+       el('th',{class:'num opt'},'Non-Wi-Fi at peak',info('radioUtil','95th percentile of airtime taken by non-Wi-Fi interference: microwave ovens, Bluetooth, cordless phones, video senders and radar (5 GHz). It is already included in Average and Peak; here it is shown on its own.')),
+       el('th',{class:'opt'},`Trend over ${C.window.days} days`,info('radioUtil','Average utilization for each hour of the period. All radios share one scale, so line heights compare directly.')))),utb)));
    let panel=null;
    if(rSel){const r=all.find(x=>keyOf(x)===rSel),ab=apB(C,r)||{},nb=((C.neighbors||{}).coChannel||[]).find(x=>x.serial===r.serial&&String(x.band)===String(r.band)&&x.channel===r.channel);
      const SN=C.ssidNames||{};

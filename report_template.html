@@ -322,8 +322,6 @@ section,details{scroll-margin-top:52px}
 .sl:hover,.sl.on{border-color:var(--accent)}.sl .k{font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted)}.sl .v{font-size:24px;font-weight:650}
 .sl .s{font-size:12px;color:var(--muted)}.sl .miss{color:var(--fg)}
 .slbar{height:6px;background:var(--soft);border-radius:3px;overflow:hidden}.slbar span{display:block;height:100%;background:var(--accent)}
-.aplines{font-size:11.5px}.aplines div{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.tile.tile2{grid-column:span 2}@media (max-width:640px){.tile.tile2{grid-column:auto}.aplines div{white-space:normal}}
 </style>
 </head>
 <body>
@@ -349,7 +347,6 @@ const win=S=>fds(S.window.t0)+' – '+fd(S.window.t1);
 const css=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
 const days=S=>S.window.days;
 const band=b=>b+' GHz';
-const AP_LINES=5;   /* sites with this many APs or fewer list each AP on the tile */
 const apUp=(S,a)=>{if(!S.availability)return null;const x=(S.availability.byAp||{})[a.serial];return (x?nf(x.uptimePct,2):'100')+'% up'};
 const apUptime=S=>{const av=S.availability;if(!av)return null;const L=Object.values(av.byAp||{}),out=L.reduce((t,x)=>t+(x.offline||0),0);
   if(!L.length)return `no outages in ${days(S)} days`;const worst=L.slice().sort((a,b)=>(a.uptimePct??100)-(b.uptimePct??100))[0];
@@ -943,12 +940,10 @@ function render(){
     el('div',{class:'k'},k),el('div',{class:'v'},v),extra||null,sub);
   {const a=apStat(C),pa=P?apStat(P):null;
    const down=C.aps.filter(x=>x.status&&x.status!=='online');
-   tiles.append(mkTile('aps','Access points',a.known?`${a.on}/${a.n} online`:`${a.n} APs`,
-     C.aps.length<=AP_LINES?el('div',{class:'s rlines aplines'},C.aps.map(x=>el('div',{title:x.name},el('span',{class:'dot sm '+((x.status||'')==='online'?'good':x.status==='alerting'?'warn':x.status?'bad':'same')}),
-         [x.name,x.mac||null,x.lanIp||null,apUp(C,x)].filter(Boolean).join(' · '))),el('div',{class:'muted'},[`${nf(a.now,0)} clients now`,fwLine(C)].filter(Boolean).join(' · '))):
+   tiles.append(mkTile('aps','Availability',a.known?`${a.on}/${a.n} online`:`${a.n} APs`,
      el('div',{class:'s'},!down.length?[`${nf(a.now,0)} clients connected now`,apUptime(C),fwLine(C)].filter(Boolean).join(' · '):down.length<=2?down.map(x=>`${x.name}: ${x.status}`).join(' · '):[['offline','offline'],['alerting','alerting'],['dormant','dormant']].map(([k,l])=>{const c=down.filter(x=>x.status===k).length;return c?`${c} ${l}`:''}).filter(Boolean).join(' · ')+' · click for the list'),
      pa&&pa.known&&!isCross(C,P)?el('div',{class:'tchg'},el('span',{class:'chip '+(a.on===pa.on?'same':a.on>pa.on?'good':'bad')},a.on===pa.on?'No change':(a.on>pa.on?'+':'−')+Math.abs(a.on-pa.on)+' online'),el('span',{class:'muted small'},` vs ${pa.on}/${pa.n}`)):null,
-     (down.length?' alertt':'')+(C.aps.length<=AP_LINES?' tile2':'')))}
+     down.length?' alertt':''))}
   {const r=radStat(C);
    const many=C.aps.length>3;
    const lines=r.list.length?el('div',{class:'s rlines'},r.list.map(x=>el('div',{},el('span',{class:'dot sm '+x.state}),`${x.ss.name} → ${x.ss.radiusServers.join(', ')||'no server'}`+(many?` · ${x.apsOk}/${C.aps.length} APs`:'')+(x.apsTo?` · ${x.apsTo} with timeouts`:'')))):el('div',{class:'s'},'No 802.1X SSIDs enabled');
@@ -995,13 +990,17 @@ function render(){
     const rows=C.aps.map(a=>({...a,st:(a.status||'unknown').toLowerCase()})).sort((x,y)=>(rank[x.st]??2)-(rank[y.st]??2)||x.name.localeCompare(y.name));
     const n=k=>rows.filter(r=>r.st===k).length,now=rows.reduce((t,r)=>t+(r.clientsNow||0),0);
     const stCls=st=>st==='online'?'good':st==='alerting'?'warn':st==='offline'?'bad':'same';
-    guide=el('div',{class:'guide'},el('div',{class:'guide-h'},el('b',{},'Access points',info(['apStatus','clientsNow'],'Status at the moment the snapshot was taken.')),closeBtn()),
+    guide=el('div',{class:'guide'},el('div',{class:'guide-h'},el('b',{},'Availability',info(['apStatus','clientsNow','availability'],'Status at the moment the snapshot was taken; uptime over the snapshot period.')),closeBtn()),
       el('p',{},`${n('online')} of ${rows.length} online`+(n('alerting')?` · ${n('alerting')} alerting`:'')+(n('offline')?` · ${n('offline')} offline`:'')+` · ${nf(now,0)} clients connected now. Offline and alerting APs are listed first.`),
       miniTable({id:'ap-list',rows,search:'Find an AP by name, model, MAC or IP…',
         chips:[['all','All',()=>true],['online','Online',r=>r.st==='online'],['alerting','Alerting',r=>r.st==='alerting'],['offline','Offline',r=>r.st==='offline']],
-        cols:[{l:'Status',f:r=>el('span',{class:'stcell'},el('span',{class:'dot '+stCls(r.st)}),r.st[0].toUpperCase()+r.st.slice(1))},{l:'AP',f:r=>el('b',{},r.name)},{l:'Model',f:r=>r.model||'—'},{l:'Firmware',f:r=>r.firmware||'—'},
+        cols:[{l:'AP',f:r=>el('span',{class:'stcell',title:r.st[0].toUpperCase()+r.st.slice(1)},el('span',{class:'dot '+stCls(r.st)}),el('b',{},r.name))},
+          {l:'IP',f:r=>el('span',{class:'mono small'},r.lanIp||'—')},
+          {l:'MAC',f:r=>el('span',{class:'mono small'},r.mac||'—')},
+          {l:`Uptime (${days(C)} d)`,num:1,f:r=>{const x=get(C,['availability','byAp',r.serial]);return !C.availability?'—':x?el('span',{title:`${x.offline} outage(s), ${nf(x.notOnlineMin,0)} min not online`},nf(x.uptimePct,2)+'%'):'100%'}},
+          {l:'Status',f:r=>r.st[0].toUpperCase()+r.st.slice(1)+(r.st!=='online'&&r.lastReportedAt?` · last seen ${fd(r.lastReportedAt)}`:'')},
           {l:'Clients now',num:1,f:r=>r.clientsNow==null?'—':nf(r.clientsNow,0)},
-          {l:`Uptime (${days(C)} d)`,num:1,f:r=>{const x=get(C,['availability','byAp',r.serial]);return !C.availability?'—':x?el('span',{title:`${x.offline} outage(s), ${nf(x.notOnlineMin,0)} min not online`},nf(x.uptimePct,2)+'%'):'100%'}},{l:'MAC · LAN IP',f:r=>el('span',{class:'mono small'},[r.mac,r.lanIp].filter(Boolean).join(' · ')||'—')},{l:'Last seen',f:r=>r.st!=='online'&&r.lastReportedAt?fd(r.lastReportedAt):'—'}],
+          {l:'Model',f:r=>r.model||'—'},{l:'Firmware',f:r=>r.firmware||'—'}],
         text:r=>[r.name,r.model,r.mac,r.lanIp,r.firmware,r.st].join(' ')}),
       apExtras(C),
       el('ol',{},el('li',{},'Offline or alerting APs: check power (PoE budget on the switch port), the uplink and the AP’s event log in Dashboard.'),el('li',{},'Uneven client counts can be normal (meeting rooms, entrances) or a sign of one AP holding clients that should roam.')))}
@@ -1140,7 +1139,7 @@ function render(){
   const att=[];
   {const openT=id=>()=>{openTile=id;render();setTimeout(()=>goTo('overview'),30)};
    const down=C.aps.filter(x=>x.status&&x.status!=='online');
-   if(down.length)att.push(['bad',`${down.length} of ${C.aps.length} APs ${down.length>1?'are':'is'} not online: ${down.slice(0,3).map(x=>`${x.name} (${x.status})`).join(', ')}${down.length>3?'…':''}.`,'Access points',openT('aps')]);
+   if(down.length)att.push(['bad',`${down.length} of ${C.aps.length} APs ${down.length>1?'are':'is'} not online: ${down.slice(0,3).map(x=>`${x.name} (${x.status})`).join(', ')}${down.length>3?'…':''}.`,'Availability',openT('aps')]);
    const r=radStat(C);
    for(const x of r.list){if(x.state==='bad')att.push(['bad',`RADIUS for ${x.ss.name} timed out with no successful logins: clients on that SSID can’t authenticate.`,'RADIUS servers',openT('radius')]);
      else if(x.state==='warn')att.push(['warn',`RADIUS for ${x.ss.name} timed out from ${x.apsTo} AP${x.apsTo>1?'s':''}, though logins also succeeded.`,'RADIUS servers',openT('radius')])}
@@ -1151,12 +1150,12 @@ function render(){
     if(rg&&(!rg.countryCode||rg.countryCode==='default'))att.push(['bad','No country is set for this network: Meraki’s default regulatory domain restricts channels and power and keeps 6 GHz off.','Regulatory domain',openT('regulatory')]);
     else if(rg&&!rg.permits6e&&n6)att.push(['bad',`6 GHz isn’t permitted in ${regionName(rg.countryCode)}, yet ${n6} radio${n6>1?'s are':' is'} on 6 GHz. Check the network’s country.`,'Regulatory domain',openT('regulatory')]);
     else if(rg&&rg.permits6e&&!n6)att.push(['warn',`6 GHz is permitted in ${regionName(rg.countryCode)} but no radio is using it.`,'Regulatory domain',openT('regulatory')])}
-   for(const a of (C.healthAlerts||[]))att.push([/critical|error/i.test(a.severity||'')?'bad':'warn',`Meraki health alert: ${a.title||a.type}`+(a.devices.length?` (${a.devices.slice(0,3).join(', ')}${a.devices.length>3?'…':''})`:'')+(a.startedAt?`, open since ${fds(a.startedAt)}`:'')+'.','Access points',openT('aps')]);
-   {const L=Object.values((C.availability||{}).byAp||{}).filter(x=>x.offline);if(L.length)att.push(['bad',`${L.length} AP${L.length>1?'s':''} went offline during the period: ${L.slice(0,3).map(x=>`${x.ap} (${x.offline}×, ${nf(x.notOnlineMin,0)} min)`).join(', ')}${L.length>3?'…':''}.`,'Access points',openT('aps')])}
+   for(const a of (C.healthAlerts||[]))att.push([/critical|error/i.test(a.severity||'')?'bad':'warn',`Meraki health alert: ${a.title||a.type}`+(a.devices.length?` (${a.devices.slice(0,3).join(', ')}${a.devices.length>3?'…':''})`:'')+(a.startedAt?`, open since ${fds(a.startedAt)}`:'')+'.','Availability',openT('aps')]);
+   {const L=Object.values((C.availability||{}).byAp||{}).filter(x=>x.offline);if(L.length)att.push(['bad',`${L.length} AP${L.length>1?'s':''} went offline during the period: ${L.slice(0,3).map(x=>`${x.ap} (${x.offline}×, ${nf(x.notOnlineMin,0)} min)`).join(', ')}${L.length>3?'…':''}.`,'Availability',openT('aps')])}
    {const f=C.firmware,mx=fwMixed(C);
-    if(f&&f.current&&f.latestStable&&f.latestStable.name!==f.current.name&&(f.latestStable.date||'')>(f.current.date||''))att.push(['warn',`A newer stable firmware is available: ${f.latestStable.name} (running ${f.current.name}).`,'Access points',openT('aps')]);
-    if(f&&f.current&&f.current.type&&f.current.type!=='stable')att.push(['warn',`The network runs ${f.current.type} firmware ${f.current.name}, not a stable release.`,'Access points',openT('aps')]);
-    if(mx)att.push(['warn',`APs run different firmware versions: ${mx.join(', ')}.`,'Access points',openT('aps')])}
+    if(f&&f.current&&f.latestStable&&f.latestStable.name!==f.current.name&&(f.latestStable.date||'')>(f.current.date||''))att.push(['warn',`A newer stable firmware is available: ${f.latestStable.name} (running ${f.current.name}).`,'Availability',openT('aps')]);
+    if(f&&f.current&&f.current.type&&f.current.type!=='stable')att.push(['warn',`The network runs ${f.current.type} firmware ${f.current.name}, not a stable release.`,'Availability',openT('aps')]);
+    if(mx)att.push(['warn',`APs run different firmware versions: ${mx.join(', ')}.`,'Availability',openT('aps')])}
    const ar=C.autoRf;if(ar&&ar.ai&&ar.ai.enabled===false)att.push(['warn','AI-RRM is off, so Meraki’s AI channel and power planning isn’t used.','AI-RRM',openT('airrm')]);
    const nOv=(C.radioOverrides||[]).reduce((t,x)=>t+x.radios.length,0);if(nOv)att.push(['warn',`${nOv} radio${nOv>1?'s have':' has'} a manually fixed channel, power or width, outside AutoRF’s control.`,'AI-RRM',openT('airrm')]);
    const pr=problemRows(C).filter(x=>!isSynthetic(x)),pT=(C.rates.disconnects||0)+(C.rates.dot1xFailures||0);

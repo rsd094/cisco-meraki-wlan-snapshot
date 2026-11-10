@@ -334,6 +334,17 @@ section,details{scroll-margin-top:52px}
 .rv-in svg.spark{animation:rvDraw 1.1s ease both;animation-delay:calc(var(--rvd,0ms) + 100ms)}
 @media (prefers-reduced-motion:reduce){.rv-wait *,.rv-in *{animation:none!important;opacity:1!important}}
 @media print{.rv-wait *,.rv-in *{animation:none!important;opacity:1!important}}
+.tree{margin-top:8px;font-size:13px}.tn-kids{margin-left:14px;padding-left:12px;border-left:1px solid var(--line)}
+.tn-row{display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:4px 0}.tn-port{color:var(--muted);font-size:12px;font-family:ui-monospace,Menlo,monospace}
+.tn-ico{display:inline-block;width:10px;height:10px;border-radius:3px;flex:none;background:var(--faint)}
+.tn-ico.router{background:#888780}.tn-ico.switch{background:#1D9E75}.tn-ico.ap{background:#7F77DD}.tn-ico.disc{background:transparent;border:1px dashed var(--faint)}
+.tn-ico.client,.tn-ico.server,.tn-ico.vpn{background:var(--accent)}
+.tn-legend{display:flex;flex-wrap:wrap;gap:6px 12px;align-items:center;margin-top:4px}
+.np-chain{display:flex;flex-direction:column;gap:0;margin-top:10px}
+.np-hop{display:grid;grid-template-columns:14px minmax(0,1fr);gap:10px;align-items:start;position:relative;padding-bottom:8px}
+.np-hop:not(:last-child)::before{content:"";position:absolute;left:6px;top:16px;bottom:0;width:1px;background:var(--line)}
+.np-hop>.tn-ico{margin-top:12px}.np-card{background:var(--soft);border-radius:8px;padding:8px 12px}.np-card .qb{margin:4px 6px 0 0}
+.qb.np-v{background:color-mix(in srgb,var(--b24) 18%,transparent);color:var(--b24)}.qb.np-ok{background:var(--good-bg);color:var(--good)}.qb.np-bad{background:var(--bad-bg);color:var(--bad)}
 </style>
 </head>
 <body>
@@ -416,6 +427,7 @@ function keyMetrics(S,Hs){
     miss:L?`${nf(L.over32Pct,1)}% took ${SL_LAT} ms or more`:'—',rows:[['Voice','voiceTraffic'],['Video','videoTraffic'],['Normal','bestEffortTraffic'],['Background','backgroundTraffic']].map(([l,k])=>{const x=get(S,['latency','all',k])||{};return{l,v:x.over32Pct==null?null:100-x.over32Pct,avg:x.avg}}),src:'latency'});
   return out;
 }
+const ipIn=(ip,cidr)=>{const n=s=>s.split('.').reduce((a,b)=>a*256+(+b),0);const[b,l]=String(cidr).split('/');if(!b||l==null)return false;const m=l==0?0:2**32-2**(32-l);return Math.floor(n(ip)/2**(32-l))===Math.floor(n(b)/2**(32-l))};
 const regionName=c=>{try{return c?new Intl.DisplayNames(['en'],{type:'region'}).of(String(c).toUpperCase()):'—'}catch(e){return c||'—'}};
 
 function info(keys,extra){
@@ -591,7 +603,7 @@ function miniTable(o){
   return el('div',{class:'mini',id:o.id},el('div',{class:'drow'},chips,search,count),
     el('div',{class:'tbl-wrap mini-scroll'},el('table',{class:'dtable'},el('thead',{},el('tr',{},o.cols.map(c=>el('th',{class:c.num?'num':null,style:'padding:6px 8px'},c.l)))),body)));
 }
-const SECTION_NAME={spectrum:'RF spectrum','client-bands':'Where clients connect','problem-clients':'Problematic clients',radios:'Radio utilization',band:'By band',roaming:'Roaming',scorecard:'Scorecard'};
+const SECTION_NAME={'net-path':'Network path',spectrum:'RF spectrum','client-bands':'Where clients connect','problem-clients':'Problematic clients',radios:'Radio utilization',band:'By band',roaming:'Roaming',scorecard:'Scorecard'};
 function goTo(id){const e=document.getElementById(id);if(!e)return;e.scrollIntoView({behavior:'smooth',block:'start'});e.classList.remove('flash');void e.offsetWidth;e.classList.add('flash')}
 function guideActions(t,m,C){
   const sec=SECTION_NAME[t.jump]||'detail', d=m&&m.id?drillDef(m.id,C):null;
@@ -696,7 +708,7 @@ function calloutIssues(C,P){
 const callout=(lines,title)=>el('div',{class:'callout'},el('b',{},title||'What this shows'),lines.length>1?el('ul',{},lines.map(l=>el('li',{},l))):el('p',{style:'margin-top:4px'},lines[0]||''));
 
 /* ---------- scorecard drill-down panels ---------- */
-let drill=null, drillSort=null, drillQ='', rBand='all', rAp='all', rSel=null, rQ='', spBand=null, spSel=null;
+let drill=null, drillSort=null, drillQ='', rBand='all', rAp='all', rSel=null, rQ='', spBand=null, spSel=null, npAp=null, npSsid=null, npFlow='login';
 let panelW=null;try{panelW=+localStorage.getItem('wlan-snapshot-panel-w')||null}catch(e){}
 function resizer(){
   const h=el('div',{class:'rz',role:'separator','aria-orientation':'vertical','aria-label':'Resize detail panel. Drag, or use the arrow keys. Double-click to reset.',tabindex:'0'});
@@ -964,7 +976,7 @@ function render(){
         el('button',{type:'button',onclick:exportPdf,title:'Open the print dialog; choose Save as PDF'},'PDF')),
       loadErr?el('span',{class:'err'},loadErr):null),
     seg),
-    el('nav',{class:'secnav','aria-label':'Sections'},[['overview','Overview'],['scorecard','Scorecard'],['problem-clients','Problematic clients'],['roaming','Roaming'],['client-bands','Where clients connect'],['band','By band'],['radios','Radio utilization'],['rf-config','RF configuration'],['sources','Sources']]
+    el('nav',{class:'secnav','aria-label':'Sections'},[['overview','Overview'],['scorecard','Scorecard'],['problem-clients','Problematic clients'],['roaming','Roaming'],['client-bands','Where clients connect'],['band','By band'],['radios','Radio utilization'],['rf-config','RF configuration'],['net-path','Network path'],['sources','Sources']]
       .map(([id,l])=>el('a',{href:'#'+id,onclick:e=>{e.preventDefault();if(id==='sources')document.getElementById('sources').open=true;goTo(id)}},l))));
 
   /* header */
@@ -1219,6 +1231,7 @@ function render(){
     if(f&&f.current&&f.latestStable&&f.latestStable.name!==f.current.name&&(f.latestStable.date||'')>(f.current.date||''))att.push(['warn',`A newer stable firmware is available: ${f.latestStable.name} (running ${f.current.name}).`,'Availability',openT('aps')]);
     if(f&&f.current&&f.current.type&&f.current.type!=='stable')att.push(['warn',`The network runs ${f.current.type} firmware ${f.current.name}, not a stable release.`,'Availability',openT('aps')]);
     if(mx)att.push(['warn',`APs run different firmware versions: ${mx.join(', ')}.`,'Availability',openT('aps')])}
+   for(const s of ((C.netPath||{}).servers||[]))if(s.route==='vpn'&&s.peerReachable&&s.peerReachable!=='reachable')att.push(['bad',`${s.ssid}'s RADIUS server ${s.ip} is reached through the VPN to ${s.peer}, which is ${s.peerReachable}.`,'Network path',()=>goTo('net-path')]);
    const ar=C.autoRf;if(ar&&ar.ai&&ar.ai.enabled===false)att.push(['warn','AI-RRM is off, so Meraki’s AI channel and power planning isn’t used.','AI-RRM',openT('airrm')]);
    const nOv=(C.radioOverrides||[]).reduce((t,x)=>t+x.radios.length,0);if(nOv)att.push(['warn',`${nOv} radio${nOv>1?'s have':' has'} a manually fixed channel, power or width, outside AutoRF’s control.`,'AI-RRM',openT('airrm')]);
    const pr=problemRows(C).filter(x=>!isSynthetic(x)),pT=(C.rates.disconnects||0)+(C.rates.dot1xFailures||0);
@@ -1555,6 +1568,90 @@ function render(){
      daily));
   }
 
+  /* network path: VLANs, the LLDP/CDP tree, and the path from an AP to a server */
+  {const NP=C.netPath,sec=el('section',{id:'net-path'},el('div',{class:'sec-head'},el('h2',{},'Network path'),
+      el('p',{class:'muted small'},'How the APs connect to the network: VLANs, the switch ports between each AP and the MX from LLDP and CDP, and the route an 802.1X login or a client’s traffic takes to its server.')));
+   if(!NP||!NP.available){sec.append(el('div',{class:'callout'},el('p',{},NP?'Meraki returned no topology for this network.':'This snapshot was taken before the network path was added. Take a new snapshot to see it.')));app.append(sec)}
+   else{
+    const nodeBy=Object.fromEntries(NP.nodes.map(n=>[n.id,n])),SN=C.ssidNames||{};
+    const ssidOnVlan=v=>(C.ssids||[]).filter(s=>String((NP.ssidVlans||{})[String(s.number)])===String(v));
+    const pc=c=>c?`${c.type||'?'}${c.type==='trunk'?`, native VLAN ${c.vlan??'—'}, allowed ${c.allowed||'—'}`:`, VLAN ${c.vlan??'—'}`}${c.name?` · “${c.name}”`:''}`:'';
+    const exported=new Set((NP.vpn&&NP.vpn.exported)||[]);
+    const portL=p=>p==null?'':/^\d+$/.test(String(p))?'port '+p:String(p);
+    const mgmtOf=v=>C.aps.some(a=>a.lanIp&&v.subnet&&ipIn(a.lanIp,v.subnet));
+    /* callout */
+    const lines=[];
+    if(NP.vlans.length)lines.push(`${NP.vlans.length} VLAN${NP.vlans.length>1?'s':''} on the MX: ${NP.vlans.map(v=>`${v.id} ${v.name}`).join(', ')}.`);
+    const nAp=Object.keys(NP.apPaths).length,depth=Object.values(NP.apPaths).map(p=>p.hops.filter(h=>h.type==='switch').length);
+    if(nAp)lines.push(`${nAp} AP${nAp>1?'s':''} traced to the MX through ${Math.min(...depth)}${Math.max(...depth)!==Math.min(...depth)?'–'+Math.max(...depth):''} switch${Math.max(...depth)===1?'':'es'}.`);
+    for(const s of NP.servers)lines.push(s.route==='vpn'?`${s.ssid} logins go to ${s.ip} through the site-to-site VPN to ${s.peer} (${s.peerReachable||'unknown'}), which advertises ${s.peerSubnet}.`:
+      s.route==='local'?`${s.ssid} logins go to ${s.ip} on VLAN ${s.vlan}, inside this site.`:`${s.ssid} logins go to ${s.ip} over the internet: no local VLAN or VPN peer covers that address.`);
+    {const byV={};for(const s of (C.ssids||[])){const v=(NP.ssidVlans||{})[String(s.number)];if(v!=null)(byV[v]=byV[v]||[]).push(s)}
+     for(const[v,L]of Object.entries(byV)){const kinds=new Set(L.map(s=>(s.authMode||'').includes('8021x')?'802.1X':'other'));if(L.length>1&&kinds.size>1)lines.push(`VLAN ${v} carries both 802.1X and non-802.1X SSIDs: ${L.map(s=>s.name).join(', ')}.`)}}
+    {const via=Object.entries(NP.apPaths).filter(([,p])=>p.hops[0]&&p.hops[0].type==='wireless').map(([s,p])=>`${(C.aps.find(a=>a.serial===s)||{}).name||s} through ${p.hops[0].device}`);if(via.length)lines.push(`${via.length} AP${via.length>1?'s connect':' connects'} through another AP rather than a switch: ${via.join(', ')}. If the AP in front goes down, both go offline.`)}
+    const disc=NP.nodes.filter(n=>!n.inNetwork);if(disc.length)lines.push(`LLDP also sees ${disc.length} device${disc.length>1?'s':''} outside this network: ${disc.map(n=>n.name).join(', ')}.`);
+    lines.push('Covers each hop up to the MX and the VPN tunnel’s status; the internet hops between sites aren’t in Meraki’s API.');
+    sec.append(callout(lines));
+    /* VLANs */
+    if(NP.vlans.length)sec.append(el('div',{class:'card'},el('h3',{},'VLANs',info(['mxVlans','ssids'])),el('div',{class:'tbl-wrap',style:'margin-top:8px'},el('table',{class:'dtable'},
+      el('thead',{},el('tr',{},['VLAN','Name','Subnet','Gateway','SSIDs','In site-to-site VPN'].map(h=>el('th',{style:'padding:6px 8px'},h)))),
+      el('tbody',{},NP.vlans.map(v=>el('tr',{},el('td',{},el('b',{},String(v.id))),el('td',{},v.name||'—'),el('td',{class:'mono small'},v.subnet||'—'),el('td',{class:'mono small'},v.gateway||'—'),
+        el('td',{},[mgmtOf(v)?'AP management':null,...ssidOnVlan(v.id).map(s=>s.name)].filter(Boolean).join(', ')||'—'),el('td',{},NP.vpn?(exported.has(v.subnet)?'Yes':'No'):'—'))))))));
+    /* topology tree */
+    const kids={};for(const l of NP.links)(kids[l.parent]=kids[l.parent]||[]).push(l);
+    const childSet=new Set(NP.links.map(l=>l.child)),roots=NP.nodes.filter(n=>!childSet.has(n.id)&&(kids[n.id]||[]).length);
+    const ico={appliance:'router',switch:'switch',wireless:'ap',discovered:'disc'};
+    const treeNode=(id,link,seen)=>{const n=nodeBy[id]||{name:'?',type:'?'};if(seen.has(id))return null;seen.add(id);
+      const ch=(kids[id]||[]).slice().sort((a,b)=>((nodeBy[a.child]||{}).type==='wireless')-((nodeBy[b.child]||{}).type==='wireless')||String((nodeBy[a.child]||{}).name).localeCompare(String((nodeBy[b.child]||{}).name)));
+      const row=el('div',{class:'tn-row'},el('span',{class:'tn-ico '+(ico[n.type]||'disc')}),el('b',{},n.name),n.model?el('span',{class:'muted small'},' '+n.model):null,
+        link?el('span',{class:'tn-port'},`${portL(link.childPort)} → ${(nodeBy[link.parent]||{}).name||'?'}${link.parentPort?' '+portL(link.parentPort):''}`):el('span',{class:'tn-port'},'root'),
+        !n.inNetwork?el('span',{class:'qb'},'not in this network'):null);
+      const apKids=ch.filter(l=>(nodeBy[l.child]||{}).type==='wireless'),other=ch.filter(l=>(nodeBy[l.child]||{}).type!=='wireless');
+      const sub=el('div',{class:'tn-kids'},other.map(l=>treeNode(l.child,l,seen)),apKids.length>12?el('details',{},el('summary',{},`${apKids.length} APs`),apKids.map(l=>treeNode(l.child,l,seen))):apKids.map(l=>treeNode(l.child,l,seen)));
+      return el('div',{class:'tn'},row,ch.length?sub:null)};
+    const seen=new Set();
+    sec.append(el('div',{class:'card'},el('h3',{},'Topology from LLDP and CDP',info('topology','Each line shows the port the device uses to reach the one above it, then that device’s port.')),
+      el('div',{class:'tn-legend muted small'},el('span',{class:'tn-ico router'}),'MX ',el('span',{class:'tn-ico switch'}),'Switch ',el('span',{class:'tn-ico ap'}),'AP ',el('span',{class:'tn-ico disc'}),'Discovered, not in this network'),
+      el('div',{class:'tree'},roots.map(r=>treeNode(r.id,null,seen)))));
+    /* path explorer */
+    const apList=C.aps.filter(a=>NP.apPaths[a.serial]);
+    if(apList.length){
+     if(!npAp||!NP.apPaths[npAp])npAp=apList[0].serial;
+     const ssids=(C.ssids||[]);if(npSsid==null||!ssids.some(s=>String(s.number)===String(npSsid)))npSsid=String((ssids.find(s=>(s.radiusServers||[]).length)||ssids[0]||{}).number);
+     const ss=ssids.find(s=>String(s.number)===String(npSsid))||{},is8021x=(ss.radiusServers||[]).length>0;
+     if(!is8021x)npFlow='data';
+     const ap=C.aps.find(a=>a.serial===npAp),P_=NP.apPaths[npAp],vid=(NP.ssidVlans||{})[String(ss.number)],vl=NP.vlans.find(v=>String(v.id)===String(vid)),apV=(P_.hops[0]&&P_.hops[0].inCfg&&P_.hops[0].inCfg.vlan);
+     const mgmtV=NP.vlans.find(v=>ap&&ap.lanIp&&v.subnet&&ipIn(ap.lanIp,v.subnet));
+     const srv=NP.servers.find(s=>String(s.ssidNumber)===String(ss.number)),login=npFlow==='login';
+     const hop=(icon,title,meta,tags)=>el('div',{class:'np-hop'},el('span',{class:'tn-ico '+icon}),el('div',{class:'np-card'},el('b',{},title),el('div',{class:'muted small'},meta),el('div',{},tags.filter(Boolean).map(([t,c])=>el('span',{class:'qb '+(c||'')},t)))));
+     const chain=el('div',{class:'np-chain'});
+     chain.append(hop('client',`Client on ${ss.name||'SSID'}`,login?'Sends its identity and credentials over the air (EAP) to the AP; it never talks to the RADIUS server directly.':`Gets an address on VLAN ${vid??'—'}${vl?' ('+vl.subnet+')':''}; its traffic is bridged by the AP.`,
+       [login?['EAP over the air']:[`VLAN ${vid??'—'}`,'np-v']]));
+     chain.append(hop('ap',ap.name,login?`Wraps the EAP exchange in RADIUS and sends it from its own IP ${ap.lanIp||'—'}${mgmtV?` (VLAN ${mgmtV.id} ${mgmtV.name})`:''} to ${srv?srv.server:'the RADIUS server'}.`:`Bridges the client onto VLAN ${vid??'—'}, tagged on its uplink ${P_.uplinkPort||''}.`,
+       [[login?`from ${ap.lanIp||'AP IP'}`:`VLAN ${vid??'—'} tagged`,login?'':'np-v'],login?['RADIUS UDP '+((srv&&srv.server.split(':')[1])||'1812')]:null]));
+     for(const h of P_.hops){
+      if(h.type==='switch')chain.append(hop('switch',h.device,`In on ${h.inPort}${h.inCfg?' ('+pc(h.inCfg)+')':''}${h.outPort?` · out on ${h.outPort}${h.outCfg?' ('+pc(h.outCfg)+')':''}`:''}`,
+        [login?[`VLAN ${mgmtV?mgmtV.id:'mgmt'} ${h.inCfg&&String(h.inCfg.vlan)===String(mgmtV&&mgmtV.id)?'untagged':''}`]:[`VLAN ${vid??'—'} tagged`,'np-v']]));
+      else if(h.type==='appliance'){const gwV=login?mgmtV:vl;
+       chain.append(hop('router',h.device,`In on ${portL(h.inPort)}${gwV?` · gateway ${gwV.gateway} (VLAN ${gwV.id})`:''}${NP.wan.length?` · WAN ${NP.wan.map(w=>w.interface+' '+(w.publicIp||w.ip)).join(', ')}`:''}`,
+         [gwV&&NP.vpn?[exported.has(gwV.subnet)?'subnet in VPN':'subnet not in VPN']:null]))}
+      else if(h.type==='wireless')chain.append(hop('ap',h.device,`The AP above plugs into this AP${h.inPort?' on '+portL(h.inPort):''}, which passes its traffic through to its own uplink${h.outPort?' '+portL(h.outPort):''}.`,[['AP passthrough']]));
+      else chain.append(hop('disc',h.device,`In on ${h.inPort?portL(h.inPort):'an unreported port'}`,[]))}
+     if(login&&srv){
+      if(srv.route==='vpn'){chain.append(hop('vpn','Site-to-site VPN',`${NP.vpn?NP.vpn.mode+' ':''}tunnel to ${srv.peer}: ${srv.peerReachable||'unknown'}`,[[srv.peerReachable==='reachable'?'reachable':'not reachable',srv.peerReachable==='reachable'?'np-ok':'np-bad']]));
+        chain.append(hop('router',srv.peer,`Advertises ${srv.peerSubnet} to the VPN`,[[srv.peerSubnet,'np-ok']]))}
+      else if(srv.route==='wan')chain.append(hop('vpn','Internet',`Out of ${NP.wan.map(w=>w.interface).join(', ')||'the WAN'}: no VPN peer or local VLAN covers ${srv.ip}`,[]));
+      chain.append(hop('server',`RADIUS server ${srv.server}`,srv.route==='local'?`On VLAN ${srv.vlan}, inside this site. Its own switch port isn’t in LLDP, so the last hop isn’t shown.`:'Checks the credentials and returns Access-Accept with keys and any policy to the AP.',[]))}
+     else if(!login)chain.append(hop('vpn','Beyond the MX',`Internet traffic leaves through ${NP.wan.map(w=>`${w.interface} ${w.publicIp||w.ip}`).join(', ')||'the WAN'}; traffic to other sites goes through the VPN${NP.vpn&&NP.vpn.peers.length?' ('+NP.vpn.peers.map(p=>`${p.name} ${p.reachability}`).join(', ')+')':''}.`,[]));
+     const selAp=el('select',{'aria-label':'Access point',onchange:e=>{npAp=e.target.value;render();goTo('net-path')}},apList.map(a=>el('option',{value:a.serial,selected:a.serial===npAp?'':null},a.name)));
+     const selSs=el('select',{'aria-label':'SSID',onchange:e=>{npSsid=e.target.value;npFlow=(ssids.find(s=>String(s.number)===e.target.value)||{}).radiusServers?.length?'login':'data';render();goTo('net-path')}},ssids.map(s=>el('option',{value:String(s.number),selected:String(s.number)===String(npSsid)?'':null},`${s.name}${(s.radiusServers||[]).length?' (802.1X)':''}`)));
+     const fl=el('div',{class:'qchips'},[['login','802.1X login'],['data','Client data']].map(([k,l])=>el('button',{type:'button',class:'qchip','aria-pressed':String(npFlow===k),disabled:k==='login'&&!is8021x?'':null,onclick:()=>{npFlow=k;render();goTo('net-path')}},l)));
+     sec.append(el('div',{class:'card'},el('h3',{},'Path from an AP to the server',info(['topology','switchPorts','vpn','mxVlans'])),
+       el('div',{class:'rfilt'},el('label',{class:'small'},'AP ',selAp),el('label',{class:'small'},'SSID ',selSs),fl),chain))}
+    app.append(sec);
+   }
+  }
+
   /* where clients connect: band buttons, SSID and radio drop-downs, radios and clients */
   {const CC=C.clientConns,SN=C.ssidNames||{};
    const sec=el('section',{id:'client-bands'},el('div',{class:'sec-head'},el('h2',{},'Where clients connect'),
@@ -1754,7 +1851,7 @@ function render(){
 
   /* reading order: verdict and key numbers, then each stage of a client's experience
      (connect, stay connected and roam, which band and radio), then the RF underneath */
-  const ORDER=['overview','scorecard','problem-clients','roaming','client-bands','band','radios','spectrum','rf-config'];
+  const ORDER=['overview','scorecard','problem-clients','roaming','client-bands','band','radios','spectrum','rf-config','net-path'];
   for(const id of ORDER){const s=app.querySelector('#'+CSS.escape(id));if(s)app.append(s)}
 
   /* sources */

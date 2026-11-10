@@ -55,7 +55,7 @@ Each snapshot saves two files in the `snapshots` folder:
 4. **Observations**: what clients ran into: auth failure rate, upstream packet loss, clients per day and problematic clients. Click any tile for its review guide.
 5. **Scorecard**: every metric with its daily trend. Click a row for the clients, radios or networks behind it.
 6. Then a client's experience in order: **Problematic clients** (who has problems and what to do, then where joins fail and which APs log the events), **Roaming**, **Where clients connect** and **By band**.
-7. Then the RF underneath: **Radio utilization** and **RF configuration**, and finally **Sources and method**.
+7. Then the RF and wired network underneath: **Radio utilization**, **RF configuration** and **Network path**, and finally **Sources and method**.
 
 A bar of section links stays at the top of the page as you scroll, with the section you're reading highlighted. Sections fade in the first time they scroll into view, with numbers counting up, bars growing and trend lines drawing in; this is off when your system asks for reduced motion, and never in print or PDF.
 
@@ -96,6 +96,11 @@ Every figure in a report comes from these calls. The same list is shown in the a
 | RF configuration | `GET /networks/{networkId}/wireless/airMarshal` | Other networks your APs hear, with signal strength. | Air Marshal tile, RF spectrum, Strong neighbouring networks | 31 days (last 7 days used) | 1 |
 | RF configuration | `GET /organizations/{organizationId}/wireless/airMarshal/settings/byNetwork` | Air Marshal default policy (block or allow clients joining rogue SSIDs) and the scheduled scan setting. | Air Marshal tile | Current | 1 |
 | RF configuration | `GET /organizations/{organizationId}/wireless/airMarshal/rules` | Air Marshal allow, block and alert rules that apply to this network. | Air Marshal tile | Current | 1 |
+| Network path | `GET /networks/{networkId}/topology/linkLayer` | LLDP and CDP neighbours: which switch port each AP and switch plugs into, up to the MX. | Network path: topology and AP-to-server path | Current | 1 |
+| Network path | `GET /networks/{networkId}/appliance/vlans` | The MX's VLANs: name, subnet and gateway. | Network path: VLANs | Current | 1 |
+| Network path | `GET /organizations/{organizationId}/switch/ports/bySwitch` | Each switch port's name, mode (access or trunk), native VLAN and allowed VLANs. | Network path: port settings on every hop | Current | 1+ (pages of 50 switches) |
+| Network path | `GET /organizations/{organizationId}/appliance/vpn/statuses` | Site-to-site VPN: this network's peers, whether each is reachable, and the subnets each advertises. | Network path: how each RADIUS server is reached | Current | 1+ |
+| Network path | `GET /organizations/{organizationId}/appliance/uplink/statuses` | The MX's internet uplinks: status, IP, public IP and gateway. | Network path: WAN | Current | 1 |
 | RF configuration | `GET /networks/{networkId}/wireless/ssids` | Enabled SSIDs, their security mode and RADIUS servers. | RADIUS servers tile | Current | 1 |
 | Radio utilization | `GET /networks/{networkId}/networkHealth/channelUtilization` | How busy every radio is, in 10-minute samples, split into 802.11 (Wi-Fi) airtime and non-Wi-Fi interference. Each 5 GHz radio on dual-5 GHz APs separately. | Busiest radio tile, radio utilization, RF spectrum, scorecard | 14 days (Meraki refuses older 10-minute data) | 2 (7-day pages) |
 | Clients and traffic | `GET /networks/{networkId}/wireless/clientCountHistory` | Clients per day, for the whole network, each band, and each AP and band. | Clients per day, band share, clients per radio | 31 days | 4 + N×B |
@@ -166,6 +171,17 @@ Each key metric is a percentage: how much of the period, the joins or the roams 
 | Responsiveness | Normal (best-effort) packets that crossed the air in under 32 ms | `wireless/latencyStats` |
 
 These are built from Meraki's per-AP, per-radio and network averages, so they follow the same idea as other vendors' experience metrics but aren't directly comparable with tools that measure each client minute by minute.
+
+### Network path
+
+How the APs connect to the rest of the network, from read-only calls: LLDP and CDP neighbours (`topology/linkLayer`), the MX's VLANs, each switch port's mode and VLANs, the site-to-site VPN and the MX's internet uplinks.
+
+- **VLANs**: each MX VLAN's subnet and gateway, which SSIDs bridge onto it, whether the APs manage on it, and whether it's advertised to the site-to-site VPN.
+- **Topology**: every device LLDP or CDP sees, as a tree from the MX down, with the port each one uses to reach the device above it. Devices outside the network (for example another MX plugged into a switch) are marked.
+- **Path from an AP to the server**: pick an AP and an SSID. For an 802.1X SSID, *802.1X login* shows the RADIUS request: the client sends EAP to the AP, the AP sends RADIUS from its own management IP up each switch port (with that port's mode and VLANs) to the MX, then either stays on a local VLAN, goes through the VPN to the peer that advertises the server's subnet (with the tunnel's status), or goes out to the internet. *Client data* shows the client's own VLAN on the same path to its gateway.
+- Flagged: a RADIUS server reached through a VPN peer that isn't reachable, APs that connect through another AP rather than a switch, VLANs that carry both 802.1X and non-802.1X SSIDs, and devices outside the network.
+
+Limits: Meraki's API covers each hop up to the MX and the VPN tunnel's status, not the internet hops between sites. A server's own switch port isn't in LLDP, so a local server's last hop isn't shown. Switches from other vendors appear by name and port, without VLAN detail.
 
 ### How roams are classed
 

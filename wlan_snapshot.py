@@ -74,6 +74,10 @@ SOURCES = {
     "ssids": ("GET /networks/{networkId}/wireless/ssids", "Current state at capture time"),
     "radius": ("GET /networks/{networkId}/events (802.1X success and RADIUS timeout events)", "Inferred from the snapshot window"),
     "overrides": ("GET /organizations/{orgId}/wireless/radio/overrides/byDevice", "Current state at capture time"),
+    "topology": ("GET /networks/{networkId}/topology/linkLayer (LLDP/CDP)", "Current state at capture time"),
+    "mxVlans": ("GET /networks/{networkId}/appliance/vlans", "Current state at capture time"),
+    "switchPorts": ("GET /organizations/{orgId}/switch/ports/bySwitch", "Current state at capture time"),
+    "vpn": ("GET /organizations/{orgId}/appliance/vpn/statuses and appliance/uplink/statuses", "Current state at capture time"),
     "clientList": ("GET /networks/{networkId}/clients", "31 days"),
     "clientConn": ("GET /networks/{networkId}/wireless/clients/connectionStats", "180 days; 7 days per call"),
     "clientLatency": ("GET /networks/{networkId}/wireless/clients/latencyStats", "180 days; 7 days per call"),
@@ -117,6 +121,16 @@ ENDPOINTS = [
      "shows": "Air Marshal tile", "lookback": "Current", "calls": "1"},
     {"area": "RF configuration", "path": "GET /organizations/{organizationId}/wireless/airMarshal/rules", "use": "Air Marshal allow, block and alert rules that apply to this network.",
      "shows": "Air Marshal tile", "lookback": "Current", "calls": "1"},
+    {"area": "Network path", "path": "GET /networks/{networkId}/topology/linkLayer", "use": "LLDP and CDP neighbours: which switch port each AP and switch plugs into, up to the MX.",
+     "shows": "Network path: topology and AP-to-server path", "lookback": "Current", "calls": "1"},
+    {"area": "Network path", "path": "GET /networks/{networkId}/appliance/vlans", "use": "The MX's VLANs: name, subnet and gateway.",
+     "shows": "Network path: VLANs", "lookback": "Current", "calls": "1"},
+    {"area": "Network path", "path": "GET /organizations/{organizationId}/switch/ports/bySwitch", "use": "Each switch port's name, mode (access or trunk), native VLAN and allowed VLANs.",
+     "shows": "Network path: port settings on every hop", "lookback": "Current", "calls": "1+ (pages of 50 switches)"},
+    {"area": "Network path", "path": "GET /organizations/{organizationId}/appliance/vpn/statuses", "use": "Site-to-site VPN: this network's peers, whether each is reachable, and the subnets each advertises.",
+     "shows": "Network path: how each RADIUS server is reached", "lookback": "Current", "calls": "1+"},
+    {"area": "Network path", "path": "GET /organizations/{organizationId}/appliance/uplink/statuses", "use": "The MX's internet uplinks: status, IP, public IP and gateway.",
+     "shows": "Network path: WAN", "lookback": "Current", "calls": "1"},
     {"area": "RF configuration", "path": "GET /networks/{networkId}/wireless/ssids", "use": "Enabled SSIDs, their security mode and RADIUS servers.",
      "shows": "RADIUS servers tile", "lookback": "Current", "calls": "1"},
     {"area": "Radio utilization", "path": "GET /networks/{networkId}/networkHealth/channelUtilization", "use": "How busy every radio is, in 10-minute samples, split into 802.11 (Wi-Fi) airtime and non-Wi-Fi interference. Each 5 GHz radio on dual-5 GHz APs separately.",
@@ -431,6 +445,11 @@ def snapshot(m, args):
         "airMarshal": G("/networks/%s/wireless/airMarshal" % nid, {"t0": iso(max(t0, t1 - dt.timedelta(days=7)))}),
         "amSettings": G("/organizations/%s/wireless/airMarshal/settings/byNetwork" % oid, org_net),
         "amRules": G("/organizations/%s/wireless/airMarshal/rules" % oid, org_net),
+        "topology": G("/networks/%s/topology/linkLayer" % nid),
+        "mxVlans": G("/networks/%s/appliance/vlans" % nid),
+        "switchPorts": A("/organizations/%s/switch/ports/bySwitch" % oid, dict(org_net, perPage=50)),
+        "vpnStatus": A("/organizations/%s/appliance/vpn/statuses" % oid, {"perPage": 300}),
+        "mxUplinks": A("/organizations/%s/appliance/uplink/statuses" % oid, dict(org_net, perPage=100)),
         "clientCount|all": G("/networks/%s/wireless/clientCountHistory" % nid, dict(win, resolution=res)),
     }
     for b in BANDS:
@@ -658,6 +677,7 @@ def snapshot(m, args):
              if not r.get("network") or (r.get("network") or {}).get("id") == nid]
     snap["airMarshal"] = {"settings": st and {"defaultPolicy": st.get("defaultPolicy"), "scan": st.get("scan")},
                           "rules": rules if isinstance(rules, list) else None}
+    snap["netPath"] = _net_path(R, nid, snap)
     snap["timing"] = {"seconds": round(time.monotonic() - started, 1), "maxRps": m.MAX_RPS, "workers": m.WORKERS}
 
     snap["apiCalls"] = len(m.calls)
@@ -826,6 +846,94 @@ def _events(evs, pages):
     by_client = {c: client_types.get(c, {}) for c, _ in sorted(clients.items(), key=lambda x: -x[1])[:300]}
     return {"counts": counts, "byBand": by_band, "byAp": by_ap, "byDay": by_day, "radius": list(radius.values()), "byClient": by_client,
             "topClients": [{"client": c, "events": n} for c, n in top], "pages": pages}
+
+
+def _port_num(p):
+    """'Port 7', 'Te1/0/39', 'lan port 2', '39' -> '7', '39', '2', '39' (how the switch ports API names them)."""
+    m_ = re.search(r"(\d+)\s*$", str(p or ""))
+    return m_.group(1) if m_ else (str(p) if p is not None else None)
+
+
+def _in_subnet(ip, cidr):
+    import ipaddress
+    try:
+        return ipaddress.ip_address(ip) in ipaddress.ip_network(cidr, strict=False)
+    except ValueError:
+        return False
+
+
+def _net_path(R, nid, snap):
+    """Wired path from each AP to the network's root (LLDP/CDP), the VLANs, and how each RADIUS server is reached."""
+    topo = R.get("topology") if isinstance(R.get("topology"), dict) else None
+    nodes, links = {}, []
+    for n in (topo or {}).get("nodes") or []:
+        d, disc = n.get("device") or {}, ((n.get("discovered") or {}).get("lldp") or (n.get("discovered") or {}).get("cdp") or {})
+        nodes[n.get("derivedId")] = {"id": n.get("derivedId"), "serial": d.get("serial"), "name": d.get("name") or disc.get("systemName") or n.get("mac"),
+                                     "model": d.get("model"), "type": d.get("productType") or "discovered", "root": bool(n.get("root")),
+                                     "status": d.get("status"), "inNetwork": n.get("type") == "device",
+                                     "description": disc.get("systemDescription") if n.get("type") != "device" else None}
+    for l in (topo or {}).get("links") or []:
+        ends = l.get("ends") or []
+        if len(ends) != 2:
+            continue
+        par = next((e for e in ends if e.get("direction") == "downstream"), ends[0])
+        chi = ends[1] if par is ends[0] else ends[0]
+        port = lambda e: (((e.get("discovered") or {}).get("lldp") or {}).get("portId") or ((e.get("discovered") or {}).get("cdp") or {}).get("portId"))
+        links.append({"parent": (par.get("node") or {}).get("derivedId"), "parentPort": port(par),
+                      "child": (chi.get("node") or {}).get("derivedId"), "childPort": port(chi),
+                      "nativeVlan": ((par.get("discovered") or {}).get("cdp") or {}).get("nativeVlan")})
+    ports = {}
+    for sw in R.get("switchPorts") or []:
+        for p in sw.get("ports") or []:
+            ports[(sw.get("serial"), str(p.get("portId")))] = {"name": p.get("name"), "type": p.get("type"), "vlan": p.get("vlan"),
+                                                               "allowed": p.get("allowedVlans"), "enabled": p.get("enabled")}
+    def cfg(node_id, port):
+        n = nodes.get(node_id) or {}
+        return ports.get((n.get("serial"), _port_num(port))) if n.get("serial") else None
+    up = {l["child"]: l for l in links}
+    ap_paths = {}
+    for nid_, n in nodes.items():
+        if n["type"] != "wireless" or not n.get("serial"):
+            continue
+        hops, cur, seen = [], nid_, set()
+        while cur in up and cur not in seen:
+            seen.add(cur)
+            l = up[cur]
+            par = nodes.get(l["parent"]) or {"name": "?", "type": "?"}
+            nxt = up.get(l["parent"])
+            hops.append({"device": par.get("name"), "type": par.get("type"), "model": par.get("model"), "serial": par.get("serial"),
+                         "fromPort": l["childPort"], "inPort": l["parentPort"], "inCfg": cfg(l["parent"], l["parentPort"]),
+                         "outPort": nxt["childPort"] if nxt else None, "outCfg": cfg(l["parent"], nxt["childPort"]) if nxt else None})
+            cur = l["parent"]
+        ap_paths[n["serial"]] = {"uplinkPort": up[nid_]["childPort"] if nid_ in up else None, "hops": hops}
+    vl = R.get("mxVlans") if isinstance(R.get("mxVlans"), list) else []
+    vlans = [{"id": v.get("id"), "name": v.get("name"), "subnet": v.get("subnet"), "gateway": v.get("applianceIp")} for v in vl]
+    vpn_all = R.get("vpnStatus") or []
+    me = next((x for x in vpn_all if x.get("networkId") == nid), None)
+    peers = []
+    for p in (me or {}).get("merakiVpnPeers") or []:
+        st = next((x for x in vpn_all if x.get("networkId") == p.get("networkId")), {})
+        peers.append({"name": p.get("networkName"), "reachability": p.get("reachability"),
+                      "subnets": [s.get("subnet") for s in st.get("exportedSubnets") or []]})
+    vpn = {"mode": me.get("vpnMode"), "status": me.get("deviceStatus"), "exported": [s.get("subnet") for s in me.get("exportedSubnets") or []],
+           "peers": peers, "thirdParty": [{"name": p.get("name"), "reachability": p.get("reachability")} for p in me.get("thirdPartyVpnPeers") or []]} if me else None
+    mx = next(iter(R.get("mxUplinks") or []), None)
+    wan = [{"interface": u.get("interface"), "status": u.get("status"), "ip": u.get("ip"), "publicIp": u.get("publicIp"), "gateway": u.get("gateway")}
+           for u in (mx or {}).get("uplinks") or [] if u.get("status") not in (None, "not connected")]
+    servers = []
+    for s in snap.get("ssids") or []:
+        for r in s.get("radiusServers") or []:
+            ip = r.rsplit(":", 1)[0]
+            local = next((v for v in vlans if v.get("subnet") and _in_subnet(ip, v["subnet"])), None)
+            peer = None if local else next((p for p in peers if any(_in_subnet(ip, c) for c in p["subnets"] if c)), None)
+            servers.append({"ssid": s.get("name"), "ssidNumber": s.get("number"), "server": r, "ip": ip,
+                            "route": "local" if local else "vpn" if peer else "wan",
+                            "vlan": local and local.get("id"), "peer": peer and peer["name"], "peerReachable": peer and peer["reachability"],
+                            "peerSubnet": peer and next((c for c in peer["subnets"] if _in_subnet(ip, c)), None)})
+    return {"available": topo is not None, "nodes": list(nodes.values()), "links": links, "apPaths": ap_paths,
+            "vlans": vlans, "vlansRead": isinstance(R.get("mxVlans"), list), "vpn": vpn, "wan": wan,
+            "mx": {"serial": (mx or {}).get("serial")} if mx else None, "servers": servers,
+            "ssidVlans": {str(x.get("number")): x.get("defaultVlanId") or x.get("vlanId") for x in (R.get("ssids") or []) if x.get("enabled")}}
 
 
 def _get_all_or_none(m, path, params=None):
@@ -1131,7 +1239,7 @@ def summarize(s):
     out = {"label": s["label"], "window": s["window"], "capturedAt": s["capturedAt"], "network": s["network"]["name"],
            "networkId": s["network"]["id"], "org": s["org"]["name"],
            "notes": s.get("notes", []), "aps": s["aps"], "rfProfiles": s.get("rfProfiles"), "autoRf": s.get("autoRf"), "regulatory": s.get("regulatory"), "firmware": s.get("firmware"), "availability": s.get("availability"),
-           "healthAlerts": s.get("healthAlerts"), "timing": s.get("timing"), "regulatoryRead": "regulatory" in s,
+           "healthAlerts": s.get("healthAlerts"), "timing": s.get("timing"), "netPath": s.get("netPath"), "regulatoryRead": "regulatory" in s,
            "neighbors": s.get("neighbors"), "airMarshal": s.get("airMarshal"), "apiCalls": s.get("apiCalls"), "apiErrors": len(s.get("apiErrors", [])),
            "ssids": s.get("ssids", []), "radioOverrides": s.get("radioOverrides")}
     # clients
